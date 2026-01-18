@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WeEarn - Click & Earn</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Babel Standalone: Compiles TSX to JavaScript in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
         body {
@@ -26,6 +28,13 @@
 </head>
 <body>
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <!-- 
+        Updated for GitHub Pages:
+        1. src="./index.tsx" (Relative path) ensures it loads correctly in subdirectories.
+        2. type="text/babel" triggers the in-browser compiler.
+        3. data-presets="react,typescript" tells Babel to handle JSX and TS syntax.
+        4. data-type="module" ensures imports work correctly.
+    -->
+    <script type="text/babel" data-type="module" data-presets="react,typescript" src="./index.tsx"></script>
 </body>
 </html>
