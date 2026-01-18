@@ -57,6 +57,25 @@ const App = () => {
     localStorage.setItem('weearn_balance', balance.toString());
   }, [balance]);
 
+  // Load Adsterra Native Banner Script
+  useEffect(() => {
+    // Le script cherche l'ID spécifique, on l'injecte une fois le composant monté
+    const script = document.createElement('script');
+    script.src = "https://pl28510872.effectivegatecpm.com/5bdd33c6e14b7c8011cb830f512409c6/invoke.js";
+    script.async = true;
+    script.dataset.cfasync = "false";
+    document.body.appendChild(script);
+
+    return () => {
+        // Cleanup au cas où le composant est démonté
+        try {
+            document.body.removeChild(script);
+        } catch (e) {
+            console.error("Erreur lors du nettoyage du script pub", e);
+        }
+    }
+  }, []);
+
   const handleClick = () => {
     setBalance(prev => prev + 1);
     setClickEffect(true);
@@ -83,7 +102,7 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col items-center relative overflow-hidden selection:bg-yellow-500 selection:text-slate-900">
+    <div className="min-h-screen bg-slate-900 text-white font-sans flex lg:flex-row flex-col items-center justify-center relative overflow-hidden selection:bg-yellow-500 selection:text-slate-900">
       
       {/* Dynamic Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -91,7 +110,15 @@ const App = () => {
          <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
       </div>
 
-      <div className="z-10 w-full max-w-md px-6 flex flex-col h-screen py-6">
+      {/* Left Ad Banner (Desktop Only) */}
+      <div className="hidden lg:flex flex-col justify-center items-center w-80 h-full z-20 pointer-events-auto p-4">
+          <div className="text-xs text-slate-600 mb-2 uppercase tracking-widest">Sponsor</div>
+          {/* Container Adsterra Gauche */}
+          <div id="container-5bdd33c6e14b7c8011cb830f512409c6"></div>
+      </div>
+
+      {/* Main Game Container */}
+      <div className="z-10 w-full max-w-md px-6 flex flex-col h-screen py-6 lg:h-auto lg:min-h-[800px] lg:border-x lg:border-slate-800/50 lg:bg-slate-900/50 lg:backdrop-blur-sm">
         {/* Header */}
         <header className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-2">
@@ -158,6 +185,13 @@ const App = () => {
         <footer className="text-center text-slate-500 text-xs font-medium">
             WeEarn &copy; 2024. Gagnez une pièce à chaque clique.
         </footer>
+      </div>
+
+      {/* Right Ad Banner (Desktop Only) */}
+      <div className="hidden lg:flex flex-col justify-center items-center w-80 h-full z-20 pointer-events-auto p-4">
+          <div className="text-xs text-slate-600 mb-2 uppercase tracking-widest">Sponsor</div>
+          {/* Container Adsterra Droit - Note: Les IDs dupliqués peuvent poser problème pour certains scripts, mais c'est requis ici */}
+          <div id="container-5bdd33c6e14b7c8011cb830f512409c6"></div>
       </div>
 
       {/* Cashout Modal */}
