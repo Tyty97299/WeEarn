@@ -6,35 +6,246 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WeEarn - Click & Earn</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Babel Standalone: Compiles TSX to JavaScript in the browser -->
+    <!-- Babel Standalone : Compile le React/TypeScript directement dans le navigateur -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #0f172a; /* slate-900 fallback */
+            background-color: #0f172a;
         }
     </style>
-<script type="importmap">
+    <!-- Import Map pour charger React depuis un CDN -->
+    <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "react/": "https://esm.sh/react@^19.2.3/"
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.263.1",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
   }
 }
 </script>
 </head>
 <body>
     <div id="root"></div>
+
     <!-- 
-        Updated for GitHub Pages:
-        1. src="./index.tsx" (Relative path) ensures it loads correctly in subdirectories.
-        2. type="text/babel" triggers the in-browser compiler.
-        3. data-presets="react,typescript" tells Babel to handle JSX and TS syntax.
-        4. data-type="module" ensures imports work correctly.
+      Code de l'application intégré directement pour éviter les erreurs 404 sur les fichiers externes 
+      lors du déploiement sur GitHub Pages.
     -->
-    <script type="text/babel" data-type="module" data-presets="react,typescript" src="./index.tsx"></script>
+    <script type="text/babel" data-type="module" data-presets="react,typescript">
+import React, { useState, useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap } from "lucide-react";
+
+// Main App Component
+const App = () => {
+  const [balance, setBalance] = useState(0);
+  const [isCashoutOpen, setIsCashoutOpen] = useState(false);
+  const [adminCode, setAdminCode] = useState("");
+  const [cashoutState, setCashoutState] = useState('idle'); // 'idle' | 'success' | 'error'
+  const [clickEffect, setClickEffect] = useState(false);
+
+  // Load balance from local storage to persist between reloads
+  useEffect(() => {
+    const saved = localStorage.getItem('weearn_balance');
+    if (saved) setBalance(parseInt(saved, 10));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('weearn_balance', balance.toString());
+  }, [balance]);
+
+  const handleClick = () => {
+    setBalance(prev => prev + 1);
+    setClickEffect(true);
+    setTimeout(() => setClickEffect(false), 100);
+  };
+
+  const handleCashoutOpen = () => {
+    setIsCashoutOpen(true);
+    setCashoutState('idle');
+    setAdminCode("");
+  };
+
+  const handleVerifyCashout = () => {
+    if (adminCode === "121519") {
+      setCashoutState('success');
+      setTimeout(() => {
+        setBalance(0);
+        setIsCashoutOpen(false);
+        setCashoutState('idle');
+      }, 2000);
+    } else {
+      setCashoutState('error');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col items-center relative overflow-hidden selection:bg-yellow-500 selection:text-slate-900">
+      
+      {/* Dynamic Background */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+         <div className="absolute -top-24 -right-24 w-96 h-96 bg-yellow-500/10 rounded-full blur-3xl animate-pulse"></div>
+         <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl animate-pulse" style={{animationDelay: '1s'}}></div>
+      </div>
+
+      <div className="z-10 w-full max-w-md px-6 flex flex-col h-screen py-6">
+        {/* Header */}
+        <header className="flex justify-between items-center mb-8">
+          <div className="flex items-center gap-2">
+            <div className="bg-gradient-to-br from-yellow-400 to-orange-600 p-2 rounded-xl shadow-lg shadow-orange-500/20">
+                <Coins className="text-white w-6 h-6" />
+            </div>
+            <h1 className="text-2xl font-black italic tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+              WeEarn
+            </h1>
+          </div>
+          <button
+            onClick={handleCashoutOpen}
+            className="flex items-center gap-2 bg-slate-800/50 hover:bg-slate-800 backdrop-blur-md border border-slate-700 hover:border-slate-600 transition-all px-4 py-2 rounded-full text-sm font-medium group"
+          >
+            <Wallet className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+            <span>Retrait</span>
+          </button>
+        </header>
+
+        {/* Main Display */}
+        <main className="flex-1 flex flex-col items-center justify-center gap-12 pb-12">
+            
+            {/* Balance Counter */}
+            <div className="flex flex-col items-center gap-1 animate-in slide-in-from-bottom-4 duration-500">
+                <span className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em]">Solde Actuel</span>
+                <div className="text-7xl font-black tabular-nums tracking-tighter text-white drop-shadow-2xl flex items-baseline gap-2">
+                    {balance.toLocaleString()}
+                    <span className="text-3xl text-yellow-500 font-bold">$WE</span>
+                </div>
+            </div>
+
+            {/* The Big Button */}
+            <div className="relative">
+                {/* Glow effect behind button */}
+                <div className={`absolute inset-0 bg-yellow-500/30 rounded-full blur-2xl transition-all duration-100 ${clickEffect ? 'scale-110 opacity-100' : 'scale-100 opacity-50'}`}></div>
+                
+                <button
+                    onClick={handleClick}
+                    className={`
+                        relative group
+                        w-64 h-64 rounded-full
+                        bg-gradient-to-br from-yellow-300 via-yellow-500 to-orange-600
+                        shadow-[0_10px_40px_-10px_rgba(234,179,8,0.5),inset_0_4px_4px_rgba(255,255,255,0.4),inset_0_-4px_8px_rgba(0,0,0,0.2)]
+                        border-[6px] border-yellow-200/20
+                        transition-all duration-75 ease-out
+                        flex flex-col items-center justify-center
+                        active:scale-95 active:translate-y-1
+                        hover:scale-105 hover:-translate-y-1
+                        z-10
+                        overflow-hidden
+                    `}
+                >
+                    {/* Shine effect */}
+                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+                    
+                    <Zap className={`w-24 h-24 text-yellow-900 mb-2 drop-shadow-sm transition-transform duration-75 ${clickEffect ? 'scale-110' : 'scale-100'}`} fill="currentColor" />
+                    <span className="text-yellow-950 font-black text-2xl uppercase tracking-widest drop-shadow-sm select-none">
+                        Clique !
+                    </span>
+                </button>
+            </div>
+        </main>
+
+        <footer className="text-center text-slate-500 text-xs font-medium">
+            WeEarn &copy; 2024. Gagnez une pièce à chaque clique.
+        </footer>
+      </div>
+
+      {/* Cashout Modal */}
+      {isCashoutOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div 
+                className="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative animate-in zoom-in-95 duration-200"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <button
+                    onClick={() => setIsCashoutOpen(false)}
+                    className="absolute top-4 right-4 p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition"
+                >
+                    <X className="w-4 h-4" />
+                </button>
+
+                <div className="flex flex-col items-center gap-5 text-center pt-2">
+                    <div className="w-16 h-16 bg-gradient-to-br from-slate-800 to-slate-700 rounded-2xl flex items-center justify-center shadow-inner border border-slate-600">
+                        <Lock className="w-8 h-8 text-slate-300" />
+                    </div>
+                    
+                    <div>
+                        <h2 className="text-xl font-bold text-white mb-2">Zone Admin</h2>
+                        <p className="text-slate-400 text-sm leading-relaxed">
+                            Entrez le code de sécurité pour transférer <br/>
+                            <strong className="text-yellow-400 text-lg">{balance.toLocaleString()} $WE</strong> vers votre portefeuille.
+                        </p>
+                    </div>
+
+                    <div className="w-full space-y-4">
+                        <input
+                            type="password"
+                            inputMode="numeric"
+                            placeholder="Code Admin (ex: 123456)"
+                            value={adminCode}
+                            onChange={(e) => {
+                                setAdminCode(e.target.value);
+                                if (cashoutState === 'error') setCashoutState('idle');
+                            }}
+                            className={`
+                                w-full bg-slate-950 border-2 rounded-xl px-4 py-4 text-center text-lg text-white placeholder-slate-600 
+                                focus:outline-none focus:ring-4 transition-all
+                                ${cashoutState === 'error' 
+                                    ? 'border-red-500/50 focus:border-red-500 focus:ring-red-500/20' 
+                                    : 'border-slate-800 focus:border-yellow-500 focus:ring-yellow-500/20'}
+                            `}
+                        />
+
+                        {cashoutState === 'error' && (
+                            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-950/30 border border-red-900/50 p-3 rounded-xl justify-center animate-in slide-in-from-top-2">
+                                <AlertCircle className="w-4 h-4 shrink-0" />
+                                <span>Code incorrect. Accès refusé.</span>
+                            </div>
+                        )}
+
+                        {cashoutState === 'success' && (
+                            <div className="flex items-center gap-2 text-emerald-400 text-sm bg-emerald-950/30 border border-emerald-900/50 p-3 rounded-xl justify-center animate-in slide-in-from-top-2">
+                                <CheckCircle className="w-4 h-4 shrink-0" />
+                                <span>Code validé ! Transfert en cours...</span>
+                            </div>
+                        )}
+
+                        <button
+                            onClick={handleVerifyCashout}
+                            disabled={cashoutState === 'success' || !adminCode}
+                            className={`
+                                w-full font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2
+                                ${cashoutState === 'success' 
+                                    ? 'bg-emerald-500 text-white' 
+                                    : 'bg-yellow-500 hover:bg-yellow-400 text-yellow-950 shadow-lg shadow-yellow-500/20 hover:shadow-yellow-500/40 active:scale-95'}
+                                disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100
+                            `}
+                        >
+                            {cashoutState === 'success' ? 'Succès' : 'Valider le retrait'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Initialisation de l'application
+const root = createRoot(document.getElementById("root"));
+root.render(<App />);
+    </script>
 </body>
 </html>
