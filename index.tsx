@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick, Bell, ShoppingBag, Building2, Ticket, Backpack, Bot, Play, Timer, Activity } from "lucide-react";
+import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick, Bell, ShoppingBag, Building2, Ticket, Backpack, Bot, Play, Timer, Activity, Users, Moon } from "lucide-react";
 
 // Fonction pseudo-aléatoire déterministe
 const pseudoRandom = (seed: number) => {
@@ -11,36 +11,98 @@ const pseudoRandom = (seed: number) => {
 // Configuration du marché
 const UPDATE_INTERVAL = 10 * 1000; // 10 secondes pour TOUT (Market + Store)
 
-const SimpleChart = ({ data }: { data: number[] }) => {
+// Composant Graphique Avancé
+const TrendChart = ({ data }: { data: number[] }) => {
     if (!data || data.length < 2) return null;
 
-    const max = Math.max(...data, 2.5); // Ensure some headroom
+    const max = Math.max(...data, 2.5);
     const min = Math.min(...data, 0);
     const range = max - min || 1;
-    const height = 60;
-    const width = 100;
+    const height = 120; // Plus haut pour "prendre de l'espace"
+    const width = 300; // Largeur de base SVG
 
-    // Create points for SVG path
+    // Génération des segments de ligne avec couleur conditionnelle
+    const segments = [];
+    for (let i = 0; i < data.length - 1; i++) {
+        const val1 = data[i];
+        const val2 = data[i + 1];
+        
+        const x1 = (i / (data.length - 1)) * width;
+        const y1 = height - ((val1 - min) / range) * height;
+        const x2 = ((i + 1) / (data.length - 1)) * width;
+        const y2 = height - ((val2 - min) / range) * height;
+
+        let color = "#fbbf24"; // Orange (Stable)
+        if (val2 > val1) color = "#4ade80"; // Green (Up)
+        if (val2 < val1) color = "#f87171"; // Red (Down)
+
+        segments.push(
+            <line 
+                key={i} 
+                x1={x1} y1={y1} 
+                x2={x2} y2={y2} 
+                stroke={color} 
+                strokeWidth="3" 
+                strokeLinecap="round"
+            />
+        );
+    }
+
+    // Zone de remplissage (gradient global)
     const points = data.map((val, i) => {
         const x = (i / (data.length - 1)) * width;
         const y = height - ((val - min) / range) * height;
         return `${x},${y}`;
     }).join(" ");
-
     const fillPath = `${points} ${width},${height} 0,${height}`;
 
     return (
-        <div className="w-full h-20 overflow-hidden relative">
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="none">
-                <defs>
-                    <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="currentColor" className="text-yellow-500" stopOpacity="0.3" />
-                        <stop offset="100%" stopColor="currentColor" className="text-yellow-500" stopOpacity="0" />
-                    </linearGradient>
-                </defs>
-                <path d={`M ${fillPath}`} fill="url(#chartGradient)" className="text-yellow-500" />
-                <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" className="text-yellow-400" />
-            </svg>
+        <div className="w-full bg-slate-950/50 rounded-2xl border border-slate-800 p-4 shadow-inner">
+            <div className="flex items-center justify-between mb-2">
+                 <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                    <Activity className="w-4 h-4" />
+                    <span>Fluctuation ($WE)</span>
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono">1H History</div>
+            </div>
+            
+            <div className="w-full h-32 overflow-hidden relative">
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
+                            <stop offset="0%" stopColor="#6366f1" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    {/* Background Grid Lines */}
+                    <line x1="0" y1={height * 0.25} x2={width} y2={height * 0.25} stroke="#334155" strokeWidth="0.5" strokeDasharray="4 4" />
+                    <line x1="0" y1={height * 0.5} x2={width} y2={height * 0.5} stroke="#334155" strokeWidth="0.5" strokeDasharray="4 4" />
+                    <line x1="0" y1={height * 0.75} x2={width} y2={height * 0.75} stroke="#334155" strokeWidth="0.5" strokeDasharray="4 4" />
+
+                    {/* Area Fill */}
+                    <path d={`M ${fillPath}`} fill="url(#chartFill)" />
+                    
+                    {/* Colored Segments */}
+                    {segments}
+                    
+                    {/* Last Point Dot */}
+                    {segments.length > 0 && (
+                        <circle 
+                            cx={width} 
+                            cy={height - ((data[data.length-1] - min) / range) * height} 
+                            r="4" 
+                            fill="white" 
+                            className="animate-pulse"
+                        />
+                    )}
+                </svg>
+            </div>
+            
+            <div className="flex justify-between mt-2 text-[10px] font-medium text-slate-500">
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-400"></div>Hausse</div>
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-yellow-400"></div>Stable</div>
+                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-400"></div>Baisse</div>
+            </div>
         </div>
     );
 };
@@ -64,13 +126,17 @@ const App = () => {
   // Market State
   const [currentRate, setCurrentRate] = useState(0.5);
   const [marketStatus, setMarketStatus] = useState({ name: 'Stable', color: 'text-yellow-400', icon: Minus });
-  const [rateHistory, setRateHistory] = useState<number[]>([0.5, 0.5, 0.4, 0.6, 0.5, 0.8, 0.5, 0.2, 0.5]); // Initial dummy history
+  const [rateHistory, setRateHistory] = useState<number[]>([0.5, 0.5, 0.4, 0.6, 0.5, 0.8, 0.5, 0.2, 0.5]); 
   const [timeLeft, setTimeLeft] = useState("");
 
   // Store Items State
   const [hotelPrice, setHotelPrice] = useState(300);
   const [autoClickerPrice, setAutoClickerPrice] = useState(1200);
   
+  // Hotel Options State
+  const [hotelNights, setHotelNights] = useState(1);
+  const [hotelPeople, setHotelPeople] = useState(1);
+
   // Inventory State
   const [voucherCount, setVoucherCount] = useState(0);
   const [autoClickerCount, setAutoClickerCount] = useState(0);
@@ -118,7 +184,12 @@ const App = () => {
           setBackpackMessage("");
           setCashoutState('idle');
       }
-  }, [isBackpackOpen, isCashoutOpen]);
+      // Reset Hotel selection on store open
+      if(isStoreOpen) {
+          setHotelNights(1);
+          setHotelPeople(1);
+      }
+  }, [isBackpackOpen, isCashoutOpen, isStoreOpen]);
 
   // --- Unified Game Loop (Market & Store) ---
   useEffect(() => {
@@ -217,12 +288,30 @@ const App = () => {
     }
   }, [autoClickerEndTime, currentRate]);
 
+  // --- Pricing Logic for Hotel ---
+  const calculateHotelTotal = () => {
+      // 1. Calculate price for one person for N nights
+      // Night 1 = 100%, Nights 2+ = 90% (10% off)
+      const nightsMultiplier = 1 + ((hotelNights - 1) * 0.9);
+      const baseCostPerPerson = hotelPrice * nightsMultiplier;
+
+      // 2. Calculate total for P people
+      // Person 1 = 100% of baseCostPerPerson
+      // Person 2+ = 85% of baseCostPerPerson (15% off)
+      const totalCost = baseCostPerPerson + ((hotelPeople - 1) * (baseCostPerPerson * 0.85));
+      
+      return Math.floor(totalCost);
+  };
+
   // Handle buying Hotel Vouchers
   const handleBuyVoucher = () => {
-      if (balance >= hotelPrice) {
-          setBalance(prev => prev - hotelPrice);
-          setVoucherCount(prev => prev + 1);
-          setStoreMessage("Ticket acheté ! 🏨");
+      const totalCost = calculateHotelTotal();
+      if (balance >= totalCost) {
+          setBalance(prev => prev - totalCost);
+          // We add the total number of "person-nights" or just tickets?
+          // Simplest: You get 1 "booking" worth of tickets. Let's add tickets = nights * people
+          setVoucherCount(prev => prev + (hotelNights * hotelPeople));
+          setStoreMessage(`Réservation confirmée ! (-${totalCost} $WE)`);
           setTimeout(() => setStoreMessage(""), 2000);
       } else {
           setStoreMessage("Fonds insuffisants !");
@@ -422,7 +511,7 @@ const App = () => {
         </header>
 
         {/* Main Display */}
-        <main className="flex-1 flex flex-col items-center justify-center gap-8 pb-12">
+        <main className="flex-1 flex flex-col items-center justify-center gap-8 pb-12 w-full">
             
             {/* Balance Counter */}
             <div className="flex flex-col items-center gap-1">
@@ -483,7 +572,7 @@ const App = () => {
             </div>
 
             {/* The Big Button */}
-            <div className="relative mt-4 flex flex-col items-center gap-8">
+            <div className="relative mt-4 flex flex-col items-center gap-8 w-full">
                 {/* Button Wrapper */}
                 <div className="relative">
                     {/* Glow effect */}
@@ -518,14 +607,8 @@ const App = () => {
                     </button>
                 </div>
 
-                {/* Market Fluctuation Chart */}
-                <div className="w-full max-w-[280px] bg-slate-800/30 rounded-xl border border-slate-700/50 backdrop-blur-sm p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2">
-                    <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                        <Activity className="w-3 h-3" />
-                        <span>Historique du taux</span>
-                    </div>
-                    <SimpleChart data={rateHistory} />
-                </div>
+                {/* Market Fluctuation Chart (Full Width now) */}
+                <TrendChart data={rateHistory} />
 
                 {/* Total Clicks Counter */}
                 <div className="flex items-center gap-2 text-slate-500 text-sm font-medium bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-700/50 animate-in fade-in slide-in-from-bottom-2">
@@ -740,30 +823,69 @@ const App = () => {
                 </div>
 
                 <div className="space-y-3">
-                    {/* WeHotel Item */}
-                    <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4 flex flex-col gap-3">
+                    {/* WeHotel Item with Options */}
+                    <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4 flex flex-col gap-4">
                         <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
                                 <div className="bg-blue-900/50 p-2.5 rounded-xl text-blue-400">
                                     <Building2 className="w-6 h-6" />
                                 </div>
                                 <div className="text-left">
-                                    <h3 className="font-bold text-white text-sm">Nuit chez WeHotel</h3>
-                                    <p className="text-slate-400 text-[10px] leading-tight mt-0.5">Valable dans tous nos hôtels.</p>
+                                    <h3 className="font-bold text-white text-sm">WeHotel Deluxe</h3>
+                                    <p className="text-slate-400 text-[10px] leading-tight mt-0.5">
+                                        Prix de base: {hotelPrice} $WE / nuit
+                                    </p>
                                 </div>
                             </div>
-                            <div className="flex flex-col items-end">
-                                <span className={`text-xl font-bold ${hotelPrice > 400 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    {hotelPrice} <span className="text-xs text-slate-500">$WE</span>
-                                </span>
+                        </div>
+
+                        {/* Options Selection */}
+                        <div className="bg-slate-900/50 rounded-xl p-3 border border-slate-700/50 space-y-3">
+                            {/* Nights Slider */}
+                            <div className="space-y-1">
+                                <div className="flex justify-between text-xs text-slate-300">
+                                    <div className="flex items-center gap-1"><Moon className="w-3 h-3" /> Nuits</div>
+                                    <span className="font-mono font-bold text-white">{hotelNights}</span>
+                                </div>
+                                <input 
+                                    type="range" min="1" max="7" step="1"
+                                    value={hotelNights}
+                                    onChange={(e) => setHotelNights(parseInt(e.target.value))}
+                                    className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                                />
+                                {hotelNights > 1 && <div className="text-[9px] text-emerald-400 text-right">-10% sur nuits sup.</div>}
+                            </div>
+
+                            {/* People Slider */}
+                            <div className="space-y-1">
+                                <div className="flex justify-between text-xs text-slate-300">
+                                    <div className="flex items-center gap-1"><Users className="w-3 h-3" /> Personnes</div>
+                                    <span className="font-mono font-bold text-white">{hotelPeople}</span>
+                                </div>
+                                <input 
+                                    type="range" min="1" max="4" step="1"
+                                    value={hotelPeople}
+                                    onChange={(e) => setHotelPeople(parseInt(e.target.value))}
+                                    className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                                />
+                                {hotelPeople > 1 && <div className="text-[9px] text-emerald-400 text-right">-15% sur pers. sup.</div>}
                             </div>
                         </div>
-                        <button
-                            onClick={handleBuyVoucher}
-                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-xl text-sm transition-all shadow-lg active:scale-95"
-                        >
-                            Acheter
-                        </button>
+                        
+                        <div className="flex flex-col gap-2">
+                             <div className="flex justify-between items-center px-1">
+                                <span className="text-xs text-slate-400">Total estimé:</span>
+                                <span className={`text-xl font-bold ${calculateHotelTotal() > balance ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    {calculateHotelTotal()} <span className="text-xs text-slate-500">$WE</span>
+                                </span>
+                            </div>
+                            <button
+                                onClick={handleBuyVoucher}
+                                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-xl text-sm transition-all shadow-lg active:scale-95"
+                            >
+                                Réserver
+                            </button>
+                        </div>
                     </div>
 
                     {/* Auto Clicker Item */}
