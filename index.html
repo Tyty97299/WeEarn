@@ -7,8 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Babel Standalone : Compile le React/TypeScript directement dans le navigateur -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Adsterra Pop-under -->
-    <script src="https://pl28510832.effectivegatecpm.com/23/57/39/235739a87c531a95b5f4a981d41a1f9f.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
         body {
@@ -16,7 +14,7 @@
             background-color: #0f172a;
         }
     </style>
-    <!-- Import Map pour charger React depuis un CDN -->
+    <!-- Import Map pour charger React depuis un CDN (Version stable uniquement) -->
     <script type="importmap">
 {
   "imports": {
@@ -248,5 +246,7 @@ const App = () => {
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
     </script>
+    <!-- Script Adsterra Pop-under déplacé en bas de page pour améliorer le chargement -->
+    <script src="https://pl28510832.effectivegatecpm.com/23/57/39/235739a87c531a95b5f4a981d41a1f9f.js"></script>
 </body>
 </html>
