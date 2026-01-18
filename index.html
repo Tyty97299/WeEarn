@@ -37,7 +37,7 @@
     <script type="text/babel" data-type="module" data-presets="react,typescript">
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock } from "lucide-react";
+import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick } from "lucide-react";
 
 // Fonction pseudo-aléatoire déterministe basée sur une graine (seed)
 // Permet d'avoir le même résultat sur tous les appareils pour un même bloc de temps
@@ -51,6 +51,7 @@ const MARKET_UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes en ms
 
 const App = () => {
   const [balance, setBalance] = useState(0);
+  const [totalClicks, setTotalClicks] = useState(0);
   const [isCashoutOpen, setIsCashoutOpen] = useState(false);
   const [adminCode, setAdminCode] = useState("");
   const [cashoutState, setCashoutState] = useState('idle');
@@ -59,18 +60,25 @@ const App = () => {
   // Market State
   const [currentRate, setCurrentRate] = useState(0.5);
   const [marketStatus, setMarketStatus] = useState({ name: 'Stable', color: 'text-yellow-400', icon: Minus });
-  const [nextUpdate, setNextUpdate] = useState(0);
   const [timeLeft, setTimeLeft] = useState("");
 
-  // Load balance (Support Float now)
+  // Load saved data
   useEffect(() => {
-    const saved = localStorage.getItem('weearn_balance');
-    if (saved) setBalance(parseFloat(saved));
+    const savedBalance = localStorage.getItem('weearn_balance');
+    if (savedBalance) setBalance(parseFloat(savedBalance));
+
+    const savedClicks = localStorage.getItem('weearn_total_clicks');
+    if (savedClicks) setTotalClicks(parseInt(savedClicks, 10));
   }, []);
 
+  // Save data on change
   useEffect(() => {
     localStorage.setItem('weearn_balance', balance.toString());
   }, [balance]);
+
+  useEffect(() => {
+    localStorage.setItem('weearn_total_clicks', totalClicks.toString());
+  }, [totalClicks]);
 
   // Market Logic Loop
   useEffect(() => {
@@ -135,8 +143,9 @@ const App = () => {
   }, []);
 
   const handleClick = () => {
-    // Utilisation de toFixed pour éviter les erreurs de virgule flottante JS (0.1 + 0.2 !== 0.3)
+    // Utilisation de toFixed pour éviter les erreurs de virgule flottante JS
     setBalance(prev => parseFloat((prev + currentRate).toFixed(2)));
+    setTotalClicks(prev => prev + 1);
     setClickEffect(true);
     setTimeout(() => setClickEffect(false), 100);
   };
@@ -234,34 +243,43 @@ const App = () => {
             </div>
 
             {/* The Big Button */}
-            <div className="relative mt-4">
-                {/* Glow effect behind button */}
-                <div className={`absolute inset-0 bg-yellow-500/30 rounded-full blur-2xl transition-all duration-100 ${clickEffect ? 'scale-110 opacity-100' : 'scale-100 opacity-50'}`}></div>
-                
-                <button
-                    onClick={handleClick}
-                    className={`
-                        relative group
-                        w-64 h-64 rounded-full
-                        bg-gradient-to-br from-yellow-300 via-yellow-500 to-orange-600
-                        shadow-[0_10px_40px_-10px_rgba(234,179,8,0.5),inset_0_4px_4px_rgba(255,255,255,0.4),inset_0_-4px_8px_rgba(0,0,0,0.2)]
-                        border-[6px] border-yellow-200/20
-                        transition-all duration-75 ease-out
-                        flex flex-col items-center justify-center
-                        active:scale-95 active:translate-y-1
-                        hover:scale-105 hover:-translate-y-1
-                        z-10
-                        overflow-hidden
-                    `}
-                >
-                    {/* Shine effect */}
-                    <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+            <div className="relative mt-4 flex flex-col items-center gap-8">
+                {/* Button Wrapper */}
+                <div className="relative">
+                    {/* Glow effect */}
+                    <div className={`absolute inset-0 bg-yellow-500/30 rounded-full blur-2xl transition-all duration-100 ${clickEffect ? 'scale-110 opacity-100' : 'scale-100 opacity-50'}`}></div>
                     
-                    <Zap className={`w-20 h-20 text-yellow-900 mb-2 drop-shadow-sm transition-transform duration-75 ${clickEffect ? 'scale-110' : 'scale-100'}`} fill="currentColor" />
-                    <span className="text-yellow-950 font-black text-3xl uppercase tracking-widest drop-shadow-sm select-none">
-                        +{currentRate}
-                    </span>
-                </button>
+                    <button
+                        onClick={handleClick}
+                        className={`
+                            relative group
+                            w-64 h-64 rounded-full
+                            bg-gradient-to-br from-yellow-300 via-yellow-500 to-orange-600
+                            shadow-[0_10px_40px_-10px_rgba(234,179,8,0.5),inset_0_4px_4px_rgba(255,255,255,0.4),inset_0_-4px_8px_rgba(0,0,0,0.2)]
+                            border-[6px] border-yellow-200/20
+                            transition-all duration-75 ease-out
+                            flex flex-col items-center justify-center
+                            active:scale-95 active:translate-y-1
+                            hover:scale-105 hover:-translate-y-1
+                            z-10
+                            overflow-hidden
+                        `}
+                    >
+                        {/* Shine effect */}
+                        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+                        
+                        <Zap className={`w-20 h-20 text-yellow-900 mb-2 drop-shadow-sm transition-transform duration-75 ${clickEffect ? 'scale-110' : 'scale-100'}`} fill="currentColor" />
+                        <span className="text-yellow-950 font-black text-3xl uppercase tracking-widest drop-shadow-sm select-none">
+                            +{currentRate}
+                        </span>
+                    </button>
+                </div>
+
+                {/* Total Clicks Counter */}
+                <div className="flex items-center gap-2 text-slate-500 text-sm font-medium bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-700/50 animate-in fade-in slide-in-from-bottom-2">
+                    <MousePointerClick className="w-4 h-4" />
+                    <span>{totalClicks.toLocaleString()} clics totaux</span>
+                </div>
             </div>
         </main>
 
