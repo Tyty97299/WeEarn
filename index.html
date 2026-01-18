@@ -44,7 +44,7 @@
     <script type="text/babel" data-type="module" data-presets="react,typescript">
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick } from "lucide-react";
+import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick, Bell } from "lucide-react";
 
 // Fonction pseudo-aléatoire déterministe basée sur une graine (seed)
 // Permet d'avoir le même résultat sur tous les appareils pour un même bloc de temps
@@ -70,6 +70,10 @@ const App = () => {
   const [marketStatus, setMarketStatus] = useState({ name: 'Stable', color: 'text-yellow-400', icon: Minus });
   const [timeLeft, setTimeLeft] = useState("");
 
+  // Notifications State
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const lastNotifiedBlock = useRef(0);
+
   // Load saved data
   useEffect(() => {
     const savedBalance = localStorage.getItem('weearn_balance');
@@ -77,6 +81,9 @@ const App = () => {
 
     const savedClicks = localStorage.getItem('weearn_total_clicks');
     if (savedClicks) setTotalClicks(parseInt(savedClicks, 10));
+
+    const savedNotify = localStorage.getItem('weearn_notifications');
+    if (savedNotify === 'true') setNotificationsEnabled(true);
   }, []);
 
   // Save data on change
@@ -88,7 +95,30 @@ const App = () => {
     localStorage.setItem('weearn_total_clicks', totalClicks.toString());
   }, [totalClicks]);
 
-  // Market Logic Loop
+  // Handle buying notifications
+  const handleBuyNotifications = async () => {
+      if (!("Notification" in window)) {
+          alert("Votre navigateur ne supporte pas les notifications.");
+          return;
+      }
+
+      if (balance < 100) {
+          alert("Solde insuffisant ! Il faut 100 $WE.");
+          return;
+      }
+
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+          setBalance(prev => prev - 100);
+          setNotificationsEnabled(true);
+          localStorage.setItem('weearn_notifications', 'true');
+          new Notification("WeEarn", { body: "Alertes activées ! Vous serez notifié des hausses." });
+      } else {
+          alert("Permission refusée. Impossible d'activer les alertes.");
+      }
+  };
+
+  // Market Logic Loop & Notification Trigger
   useEffect(() => {
     const updateMarket = () => {
         const now = Date.now();
@@ -97,20 +127,39 @@ const App = () => {
         
         // Génération du taux basé sur ce bloc temporel unique
         const rand = pseudoRandom(timeBlock);
+        
+        let newRate = 0.5;
+        let newStatus = { name: 'Stable', color: 'text-yellow-400', icon: Minus };
 
         // Définition du taux et du statut
         if (rand < 0.20) {
-            setCurrentRate(0.1);
-            setMarketStatus({ name: 'Bear Market', color: 'text-red-500', icon: TrendingDown });
+            newRate = 0.1;
+            newStatus = { name: 'Bear Market', color: 'text-red-500', icon: TrendingDown };
         } else if (rand < 0.70) { // 0.20 à 0.70 = 50%
-            setCurrentRate(0.5);
-            setMarketStatus({ name: 'Stable', color: 'text-yellow-400', icon: Minus });
+            newRate = 0.5;
+            newStatus = { name: 'Stable', color: 'text-yellow-400', icon: Minus };
         } else if (rand < 0.90) { // 0.70 à 0.90 = 20%
-            setCurrentRate(1.0);
-            setMarketStatus({ name: 'Bull Run', color: 'text-green-400', icon: TrendingUp });
+            newRate = 1.0;
+            newStatus = { name: 'Bull Run', color: 'text-green-400', icon: TrendingUp };
         } else { // Reste 10%
-            setCurrentRate(2.0); // Bonus rare "Moon"
-            setMarketStatus({ name: 'MOON 🚀', color: 'text-purple-400', icon: Zap });
+            newRate = 2.0;
+            newStatus = { name: 'MOON 🚀', color: 'text-purple-400', icon: Zap };
+        }
+
+        setCurrentRate(newRate);
+        setMarketStatus(newStatus);
+
+        // Logic Notification (si activé, si marché haussier, et si pas déjà notifié pour ce bloc)
+        const isBullish = rand >= 0.70; // 0.70+ couvre Bull Run et Moon
+        
+        // On vérifie notificationsEnabled via une ref ou directement (ici directement car useEffect dépend de notificationsEnabled ci-dessous si on l'ajoute, 
+        // ou on utilise la valeur courante dans la closure si updateMarket est recréé)
+        // Note: Pour simplifier, on lit la valeur courante.
+        if (isBullish && notificationsEnabled && lastNotifiedBlock.current !== timeBlock) {
+             new Notification("WeEarn 🚀", { 
+                body: `Le marché explose ! Taux actuel : ${newRate} $WE/clic`,
+             });
+             lastNotifiedBlock.current = timeBlock;
         }
 
         // Calcul du temps restant
@@ -127,7 +176,7 @@ const App = () => {
     // Mise à jour chaque seconde pour le compte à rebours
     const interval = setInterval(updateMarket, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [notificationsEnabled]); // Dépendance ajoutée pour que la closure updateMarket voit la bonne valeur de notificationsEnabled
 
   // Load Adsterra Native Banner Script
   useEffect(() => {
@@ -229,26 +278,52 @@ const App = () => {
             </div>
 
             {/* Market Info Card */}
-            <div className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 backdrop-blur-md flex flex-row justify-between items-center animate-in fade-in zoom-in-95 duration-500">
-                <div className="flex flex-col">
-                    <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-1">Marché Actuel</span>
-                    <div className={`flex items-center gap-2 font-bold text-lg ${marketStatus.color}`}>
-                        <StatusIcon className="w-5 h-5" />
-                        <span>{marketStatus.name}</span>
+            <div className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 backdrop-blur-md flex flex-col gap-4 animate-in fade-in zoom-in-95 duration-500">
+                <div className="flex flex-row justify-between items-center w-full">
+                    <div className="flex flex-col">
+                        <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-1">Marché Actuel</span>
+                        <div className={`flex items-center gap-2 font-bold text-lg ${marketStatus.color}`}>
+                            <StatusIcon className="w-5 h-5" />
+                            <span>{marketStatus.name}</span>
+                        </div>
                     </div>
-                </div>
-                
-                <div className="h-8 w-px bg-slate-700"></div>
+                    
+                    <div className="h-8 w-px bg-slate-700"></div>
 
-                <div className="flex flex-col items-end">
-                    <div className="flex items-center gap-1.5 text-slate-300 text-xs font-mono mb-1">
-                        <Clock className="w-3 h-3" />
-                        <span>{timeLeft}</span>
-                    </div>
-                    <div className="text-white font-bold text-lg">
-                        1 Clic = <span className={marketStatus.color}>{currentRate} $WE</span>
+                    <div className="flex flex-col items-end">
+                        <div className="flex items-center gap-1.5 text-slate-300 text-xs font-mono mb-1">
+                            <Clock className="w-3 h-3" />
+                            <span>{timeLeft}</span>
+                        </div>
+                        <div className="text-white font-bold text-lg">
+                            1 Clic = <span className={marketStatus.color}>{currentRate} $WE</span>
+                        </div>
                     </div>
                 </div>
+
+                {/* Notification Button */}
+                <button 
+                    onClick={handleBuyNotifications}
+                    disabled={notificationsEnabled}
+                    className={`
+                        w-full py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all
+                        ${notificationsEnabled 
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-default' 
+                            : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 active:scale-95'}
+                    `}
+                >
+                    {notificationsEnabled ? (
+                        <>
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>Alertes actives</span>
+                        </>
+                    ) : (
+                        <>
+                            <Bell className="w-3.5 h-3.5" />
+                            <span>M'alerter quand ça monte (100 $WE)</span>
+                        </>
+                    )}
+                </button>
             </div>
 
             {/* The Big Button */}
