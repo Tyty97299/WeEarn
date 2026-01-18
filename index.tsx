@@ -10,7 +10,7 @@ const pseudoRandom = (seed: number) => {
 };
 
 // Configuration du marché
-const MARKET_UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes en ms
+const MARKET_UPDATE_INTERVAL = 5 * 1000; // 5 secondes en ms
 
 const App = () => {
   const [balance, setBalance] = useState(0);
@@ -58,10 +58,15 @@ const App = () => {
           return;
       }
 
+      // Vérification des fonds
       if (balance < 100) {
-          alert("Solde insuffisant ! Il faut 100 $WE.");
+          alert("Fonds insuffisants ! Il vous faut 100 $WE pour activer les notifications.");
           return;
       }
+
+      // Confirmation de l'achat
+      const confirmPurchase = window.confirm("Êtes-vous sûr de consommer 100 $WE pour activer les notifications ?");
+      if (!confirmPurchase) return;
 
       const permission = await Notification.requestPermission();
       if (permission === "granted") {
@@ -327,7 +332,7 @@ const App = () => {
         </main>
 
         <footer className="text-center text-slate-500 text-xs font-medium">
-            WeEarn &copy; 2024. Le marché change toutes les 5 min.
+            WeEarn &copy; 2024. Le marché change toutes les 5 s.
         </footer>
       </div>
 
