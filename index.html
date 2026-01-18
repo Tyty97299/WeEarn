@@ -35,31 +35,86 @@
       lors du déploiement sur GitHub Pages.
     -->
     <script type="text/babel" data-type="module" data-presets="react,typescript">
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap } from "lucide-react";
+import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock } from "lucide-react";
 
-// Main App Component
+// Fonction pseudo-aléatoire déterministe basée sur une graine (seed)
+// Permet d'avoir le même résultat sur tous les appareils pour un même bloc de temps
+const pseudoRandom = (seed) => {
+    let x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+};
+
+// Configuration du marché
+const MARKET_UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes en ms
+
 const App = () => {
   const [balance, setBalance] = useState(0);
   const [isCashoutOpen, setIsCashoutOpen] = useState(false);
   const [adminCode, setAdminCode] = useState("");
-  const [cashoutState, setCashoutState] = useState('idle'); // 'idle' | 'success' | 'error'
+  const [cashoutState, setCashoutState] = useState('idle');
   const [clickEffect, setClickEffect] = useState(false);
+  
+  // Market State
+  const [currentRate, setCurrentRate] = useState(0.5);
+  const [marketStatus, setMarketStatus] = useState({ name: 'Stable', color: 'text-yellow-400', icon: Minus });
+  const [nextUpdate, setNextUpdate] = useState(0);
+  const [timeLeft, setTimeLeft] = useState("");
 
-  // Load balance from local storage to persist between reloads
+  // Load balance (Support Float now)
   useEffect(() => {
     const saved = localStorage.getItem('weearn_balance');
-    if (saved) setBalance(parseInt(saved, 10));
+    if (saved) setBalance(parseFloat(saved));
   }, []);
 
   useEffect(() => {
     localStorage.setItem('weearn_balance', balance.toString());
   }, [balance]);
 
+  // Market Logic Loop
+  useEffect(() => {
+    const updateMarket = () => {
+        const now = Date.now();
+        // Calcul du bloc de 5 minutes actuel (Timestamp entier / 5min)
+        const timeBlock = Math.floor(now / MARKET_UPDATE_INTERVAL);
+        
+        // Génération du taux basé sur ce bloc temporel unique
+        const rand = pseudoRandom(timeBlock);
+
+        // Définition du taux et du statut
+        if (rand < 0.20) {
+            setCurrentRate(0.1);
+            setMarketStatus({ name: 'Bear Market', color: 'text-red-500', icon: TrendingDown });
+        } else if (rand < 0.70) { // 0.20 à 0.70 = 50%
+            setCurrentRate(0.5);
+            setMarketStatus({ name: 'Stable', color: 'text-yellow-400', icon: Minus });
+        } else if (rand < 0.90) { // 0.70 à 0.90 = 20%
+            setCurrentRate(1.0);
+            setMarketStatus({ name: 'Bull Run', color: 'text-green-400', icon: TrendingUp });
+        } else { // Reste 10%
+            setCurrentRate(2.0); // Bonus rare "Moon"
+            setMarketStatus({ name: 'MOON 🚀', color: 'text-purple-400', icon: Zap });
+        }
+
+        // Calcul du temps restant
+        const nextTime = (timeBlock + 1) * MARKET_UPDATE_INTERVAL;
+        const diff = nextTime - now;
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
+    };
+
+    // Mise à jour immédiate
+    updateMarket();
+
+    // Mise à jour chaque seconde pour le compte à rebours
+    const interval = setInterval(updateMarket, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Load Adsterra Native Banner Script
   useEffect(() => {
-    // On attend un court instant que le DOM soit prêt
     const timer = setTimeout(() => {
         const script = document.createElement('script');
         script.src = "https://pl28510872.effectivegatecpm.com/5bdd33c6e14b7c8011cb830f512409c6/invoke.js";
@@ -70,8 +125,6 @@ const App = () => {
 
     return () => {
         clearTimeout(timer);
-        // Note: On ne supprime pas forcément le script ici pour éviter des erreurs si l'utilisateur navigue, 
-        // mais dans une SPA simple c'est acceptable.
         const script = document.querySelector('script[src*="effectivegatecpm.com"]');
         if (script) {
             try {
@@ -82,7 +135,8 @@ const App = () => {
   }, []);
 
   const handleClick = () => {
-    setBalance(prev => prev + 1);
+    // Utilisation de toFixed pour éviter les erreurs de virgule flottante JS (0.1 + 0.2 !== 0.3)
+    setBalance(prev => parseFloat((prev + currentRate).toFixed(2)));
     setClickEffect(true);
     setTimeout(() => setClickEffect(false), 100);
   };
@@ -106,6 +160,8 @@ const App = () => {
     }
   };
 
+  const StatusIcon = marketStatus.icon;
+
   return (
     <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col items-center relative overflow-x-hidden selection:bg-yellow-500 selection:text-slate-900">
       
@@ -124,7 +180,7 @@ const App = () => {
       {/* Main Game Container */}
       <div className="z-10 w-full max-w-md px-6 flex flex-col flex-1 py-6 justify-center">
         {/* Header */}
-        <header className="flex justify-between items-center mb-8">
+        <header className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-2">
             <div className="bg-gradient-to-br from-yellow-400 to-orange-600 p-2 rounded-xl shadow-lg shadow-orange-500/20">
                 <Coins className="text-white w-6 h-6" />
@@ -143,19 +199,42 @@ const App = () => {
         </header>
 
         {/* Main Display */}
-        <main className="flex-1 flex flex-col items-center justify-center gap-12 pb-12">
+        <main className="flex-1 flex flex-col items-center justify-center gap-8 pb-12">
             
             {/* Balance Counter */}
-            <div className="flex flex-col items-center gap-1 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col items-center gap-1">
                 <span className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em]">Solde Actuel</span>
-                <div className="text-7xl font-black tabular-nums tracking-tighter text-white drop-shadow-2xl flex items-baseline gap-2">
-                    {balance.toLocaleString()}
-                    <span className="text-3xl text-yellow-500 font-bold">$WE</span>
+                <div className="text-6xl font-black tabular-nums tracking-tighter text-white drop-shadow-2xl flex items-baseline gap-2">
+                    {balance.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                    <span className="text-2xl text-yellow-500 font-bold">$WE</span>
+                </div>
+            </div>
+
+            {/* Market Info Card */}
+            <div className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4 backdrop-blur-md flex flex-row justify-between items-center animate-in fade-in zoom-in-95 duration-500">
+                <div className="flex flex-col">
+                    <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-1">Marché Actuel</span>
+                    <div className={`flex items-center gap-2 font-bold text-lg ${marketStatus.color}`}>
+                        <StatusIcon className="w-5 h-5" />
+                        <span>{marketStatus.name}</span>
+                    </div>
+                </div>
+                
+                <div className="h-8 w-px bg-slate-700"></div>
+
+                <div className="flex flex-col items-end">
+                    <div className="flex items-center gap-1.5 text-slate-300 text-xs font-mono mb-1">
+                        <Clock className="w-3 h-3" />
+                        <span>{timeLeft}</span>
+                    </div>
+                    <div className="text-white font-bold text-lg">
+                        1 Clic = <span className={marketStatus.color}>{currentRate} $WE</span>
+                    </div>
                 </div>
             </div>
 
             {/* The Big Button */}
-            <div className="relative">
+            <div className="relative mt-4">
                 {/* Glow effect behind button */}
                 <div className={`absolute inset-0 bg-yellow-500/30 rounded-full blur-2xl transition-all duration-100 ${clickEffect ? 'scale-110 opacity-100' : 'scale-100 opacity-50'}`}></div>
                 
@@ -178,16 +257,16 @@ const App = () => {
                     {/* Shine effect */}
                     <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
                     
-                    <Zap className={`w-24 h-24 text-yellow-900 mb-2 drop-shadow-sm transition-transform duration-75 ${clickEffect ? 'scale-110' : 'scale-100'}`} fill="currentColor" />
-                    <span className="text-yellow-950 font-black text-2xl uppercase tracking-widest drop-shadow-sm select-none">
-                        Clique !
+                    <Zap className={`w-20 h-20 text-yellow-900 mb-2 drop-shadow-sm transition-transform duration-75 ${clickEffect ? 'scale-110' : 'scale-100'}`} fill="currentColor" />
+                    <span className="text-yellow-950 font-black text-3xl uppercase tracking-widest drop-shadow-sm select-none">
+                        +{currentRate}
                     </span>
                 </button>
             </div>
         </main>
 
         <footer className="text-center text-slate-500 text-xs font-medium">
-            WeEarn &copy; 2024. Gagnez une pièce à chaque clique.
+            WeEarn &copy; 2024. Le marché change toutes les 5 min.
         </footer>
       </div>
 
