@@ -89,15 +89,19 @@ const App = () => {
   // --- Logic for Store Price Fluctuation (Every 1 minute) ---
   useEffect(() => {
       const updateStorePrices = () => {
-          // Prix Hôtel : entre 250 et 500, biais vers le haut
-          const hotelBias = Math.max(Math.random(), Math.random());
-          setHotelPrice(Math.floor(250 + (hotelBias * 250)));
+          // Pour centrer les probabilités au milieu de la fourchette (Distribution normale/Gaussienne)
+          // On fait la moyenne de 3 tirages aléatoires.
+          const randomFactor = (Math.random() + Math.random() + Math.random()) / 3;
 
-          // Prix Auto Clicker : entre 500 et 2000, biais vers le milieu (courbe en cloche)
-          // Moyenne de 2 nombres aléatoires tend vers 0.5
-          const autoClickerBias = (Math.random() + Math.random()) / 2;
-          // 500 + (0..1 * 1500) -> 500 à 2000
-          setAutoClickerPrice(Math.floor(500 + (autoClickerBias * 1500)));
+          // Prix Hôtel : 250 - 500
+          // Moyenne théorique : 250 + (0.5 * 250) = 375.
+          // Plage très fréquente : 330 - 420.
+          setHotelPrice(Math.floor(250 + (randomFactor * 250)));
+
+          // Prix Auto Clicker : 500 - 2000
+          // Moyenne théorique : 500 + (0.5 * 1500) = 1250.
+          // Plage très fréquente : 1000 - 1500.
+          setAutoClickerPrice(Math.floor(500 + (randomFactor * 1500)));
       };
 
       // Initial update
@@ -295,14 +299,22 @@ const App = () => {
 
   const handleVerifyCashout = () => {
     if (adminCode === "121519") {
-      setCashoutState('success');
-      setTimeout(() => {
-        setBalance(0);
-        setIsCashoutOpen(false);
-        setCashoutState('idle');
-      }, 2000);
+        // Confirmation dialog added here
+        const confirmed = window.confirm(`Êtes-vous sûr de vouloir retirer ${balance.toLocaleString()} $WE ? Cette action réinitialisera votre solde.`);
+        
+        if (!confirmed) {
+            setAdminCode(""); // Reset input on cancel
+            return;
+        }
+
+        setCashoutState('success');
+        setTimeout(() => {
+            setBalance(0);
+            setIsCashoutOpen(false);
+            setCashoutState('idle');
+        }, 2000);
     } else {
-      setCashoutState('error');
+        setCashoutState('error');
     }
   };
 
