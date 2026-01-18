@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick, Bell, ShoppingBag, Building2, Ticket, Backpack, Bot, Play, Timer, Activity, Users, Moon } from "lucide-react";
+import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick, Bell, ShoppingBag, Building2, Ticket, Backpack, Bot, Play, Timer, Activity, Users, Moon, ShoppingCart, Trash2, Plus, GripHorizontal } from "lucide-react";
 
 // Fonction pseudo-aléatoire déterministe
 const pseudoRandom = (seed: number) => {
@@ -10,6 +10,18 @@ const pseudoRandom = (seed: number) => {
 
 // Configuration du marché
 const UPDATE_INTERVAL = 10 * 1000; // 10 secondes pour TOUT (Market + Store)
+
+// Types
+type CartItem = {
+    id: string;
+    type: 'hotel' | 'autoclicker';
+    name: string;
+    basePrice: number; // Prix unitaire ou prix de base au moment de l'ajout
+    quantity: number;
+    // Spécifique Hotel
+    nights?: number;
+    people?: number;
+};
 
 // Composant Graphique Avancé
 const TrendChart = ({ data }: { data: number[] }) => {
@@ -115,6 +127,7 @@ const App = () => {
   const [isCashoutOpen, setIsCashoutOpen] = useState(false);
   const [isStoreOpen, setIsStoreOpen] = useState(false);
   const [isBackpackOpen, setIsBackpackOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   
   const [adminCode, setAdminCode] = useState("");
   const [cashoutState, setCashoutState] = useState<'idle' | 'success' | 'error'>('idle');
@@ -133,11 +146,12 @@ const App = () => {
   const [hotelPrice, setHotelPrice] = useState(300);
   const [autoClickerPrice, setAutoClickerPrice] = useState(1200);
   
-  // Hotel Options State
+  // Hotel Options State (Pour la boutique)
   const [hotelNights, setHotelNights] = useState(1);
   const [hotelPeople, setHotelPeople] = useState(1);
 
-  // Inventory State
+  // Cart & Inventory State
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [voucherCount, setVoucherCount] = useState(0);
   const [autoClickerCount, setAutoClickerCount] = useState(0);
   const [storeMessage, setStoreMessage] = useState("");
@@ -179,7 +193,7 @@ const App = () => {
 
   // Reset inputs when opening modals
   useEffect(() => {
-      if (isBackpackOpen || isCashoutOpen) {
+      if (isBackpackOpen || isCashoutOpen || isCartOpen) {
           setAdminCode("");
           setBackpackMessage("");
           setCashoutState('idle');
@@ -189,7 +203,7 @@ const App = () => {
           setHotelNights(1);
           setHotelPeople(1);
       }
-  }, [isBackpackOpen, isCashoutOpen, isStoreOpen]);
+  }, [isBackpackOpen, isCashoutOpen, isStoreOpen, isCartOpen]);
 
   // --- Unified Game Loop (Market & Store) ---
   useEffect(() => {
@@ -227,12 +241,8 @@ const App = () => {
         });
 
         // 2. Update Store Prices (Synchronized)
-        // Average of 3 randoms for Bell Curve distribution
         const randomFactor = (Math.random() + Math.random() + Math.random()) / 3;
-        
-        // Hotel: 250 - 500 (Center ~375)
         setHotelPrice(Math.floor(250 + (randomFactor * 250)));
-        // Auto-Clicker: 500 - 2000 (Center ~1250)
         setAutoClickerPrice(Math.floor(500 + (randomFactor * 1500)));
 
         // 3. Notification Logic
@@ -251,19 +261,14 @@ const App = () => {
         setTimeLeft(`${seconds}s`);
     };
 
-    // Run immediately on mount
     gameTick();
-    
-    // Check time left every second for UI, but rely on block logic for updates
     const interval = setInterval(() => {
         const now = Date.now();
         const timeBlock = Math.floor(now / UPDATE_INTERVAL);
         const nextTime = (timeBlock + 1) * UPDATE_INTERVAL;
-        
-        // Update countdown
         const diff = nextTime - now;
         if (diff <= 0) {
-            gameTick(); // Force update if crossed boundary
+            gameTick();
         } else {
             const seconds = Math.ceil(diff / 1000);
             setTimeLeft(`${seconds}s`);
@@ -273,66 +278,124 @@ const App = () => {
     return () => clearInterval(interval);
   }, [notificationsEnabled]);
 
-  // --- Auto Clicker Logic ---
+  // --- Auto Clicker Logic (Enhanced) ---
   useEffect(() => {
     if (autoClickerEndTime > Date.now()) {
+        // 5 clics par seconde = 1000ms / 5 = 200ms
         const interval = setInterval(() => {
             if (Date.now() > autoClickerEndTime) {
-                setAutoClickerEndTime(0); // Finished
+                setAutoClickerEndTime(0);
             } else {
                 setBalance(prev => parseFloat((prev + currentRate).toFixed(2)));
                 setTotalClicks(prev => prev + 1);
+                
+                // Trigger animation
+                setClickEffect(true);
+                setRippleKey(prev => prev + 1);
+                setTimeout(() => setClickEffect(false), 100);
             }
-        }, 1000); // 1 click per second
+        }, 200); 
         return () => clearInterval(interval);
     }
   }, [autoClickerEndTime, currentRate]);
 
-  // --- Pricing Logic for Hotel ---
-  const calculateHotelTotal = () => {
-      // 1. Calculate price for one person for N nights
-      // Night 1 = 100%, Nights 2+ = 90% (10% off)
-      const nightsMultiplier = 1 + ((hotelNights - 1) * 0.9);
-      const baseCostPerPerson = hotelPrice * nightsMultiplier;
-
-      // 2. Calculate total for P people
-      // Person 1 = 100% of baseCostPerPerson
-      // Person 2+ = 85% of baseCostPerPerson (15% off)
-      const totalCost = baseCostPerPerson + ((hotelPeople - 1) * (baseCostPerPerson * 0.85));
-      
+  // --- Helper: Calculate Hotel Price ---
+  const calculateHotelPrice = (base: number, nights: number, people: number) => {
+      const nightsMultiplier = 1 + ((nights - 1) * 0.9);
+      const baseCostPerPerson = base * nightsMultiplier;
+      const totalCost = baseCostPerPerson + ((people - 1) * (baseCostPerPerson * 0.85));
       return Math.floor(totalCost);
   };
 
-  // Handle buying Hotel Vouchers
-  const handleBuyVoucher = () => {
-      const totalCost = calculateHotelTotal();
-      if (balance >= totalCost) {
-          setBalance(prev => prev - totalCost);
-          // We add the total number of "person-nights" or just tickets?
-          // Simplest: You get 1 "booking" worth of tickets. Let's add tickets = nights * people
-          setVoucherCount(prev => prev + (hotelNights * hotelPeople));
-          setStoreMessage(`Réservation confirmée ! (-${totalCost} $WE)`);
-          setTimeout(() => setStoreMessage(""), 2000);
+  // --- Cart Management ---
+
+  const addToCart = (item: CartItem) => {
+      setCart(prev => [...prev, item]);
+      setStoreMessage("Ajouté au panier ! 🛒");
+      setTimeout(() => setStoreMessage(""), 2000);
+  };
+
+  const removeFromCart = (index: number) => {
+      setCart(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateCartItem = (index: number, updates: Partial<CartItem>) => {
+      setCart(prev => prev.map((item, i) => i === index ? { ...item, ...updates } : item));
+  };
+
+  const calculateCartTotals = () => {
+      let subtotal = 0;
+      cart.forEach(item => {
+          if (item.type === 'hotel') {
+              subtotal += calculateHotelPrice(item.basePrice, item.nights || 1, item.people || 1);
+          } else {
+              subtotal += item.basePrice * item.quantity;
+          }
+      });
+      const tax = Math.floor(subtotal * 0.06);
+      return { subtotal, tax, total: subtotal + tax };
+  };
+
+  const handleCheckout = () => {
+      const { total } = calculateCartTotals();
+      if (balance >= total) {
+          if (cart.length === 0) return;
+          
+          setBalance(prev => prev - total);
+          
+          // Distribute items
+          let newVouchers = 0;
+          let newAutoClickers = 0;
+
+          cart.forEach(item => {
+              if (item.type === 'hotel') {
+                  // Logic: 1 item entry = 1 reservation containing (nights * people) worth of utility?
+                  // Previous logic: tickets = nights * people. Keeping it simple.
+                  newVouchers += (item.nights || 1) * (item.people || 1);
+              } else if (item.type === 'autoclicker') {
+                  newAutoClickers += item.quantity;
+              }
+          });
+
+          setVoucherCount(prev => prev + newVouchers);
+          setAutoClickerCount(prev => prev + newAutoClickers);
+          
+          setCart([]);
+          setIsCartOpen(false);
+          setStoreMessage(`Paiement réussi ! -${total} $WE`); // Show on store if open, or main
+          alert(`Paiement accepté ! Vous avez payé ${total.toLocaleString()} $WE (Taxes incluses).`);
       } else {
-          setStoreMessage("Fonds insuffisants !");
-          setTimeout(() => setStoreMessage(""), 2000);
+          alert("Fonds insuffisants pour payer le total du panier !");
       }
   };
 
-  // Handle buying Auto Clicker
-  const handleBuyAutoClicker = () => {
-      if (balance >= autoClickerPrice) {
-          setBalance(prev => prev - autoClickerPrice);
-          setAutoClickerCount(prev => prev + 1);
-          setStoreMessage("Auto-Clicker acquis ! 🤖");
-          setTimeout(() => setStoreMessage(""), 2000);
-      } else {
-          setStoreMessage("Fonds insuffisants !");
-          setTimeout(() => setStoreMessage(""), 2000);
-      }
+
+  // --- Store Actions ---
+
+  const handleAddHotelToCart = () => {
+      addToCart({
+          id: Date.now().toString(),
+          type: 'hotel',
+          name: 'WeHotel Deluxe',
+          basePrice: hotelPrice,
+          quantity: 1, // Represents 1 reservation
+          nights: hotelNights,
+          people: hotelPeople
+      });
   };
 
-  // Handle using items (Backpack)
+  const handleAddAutoClickerToCart = () => {
+      addToCart({
+          id: Date.now().toString() + 'ac',
+          type: 'autoclicker',
+          name: 'Bot WeClick',
+          basePrice: autoClickerPrice,
+          quantity: 1
+      });
+  };
+
+  // --- Other Actions ---
+
   const handleUseVoucher = () => {
       if (adminCode === "121519") {
           if (voucherCount > 0) {
@@ -355,12 +418,12 @@ const App = () => {
              return;
           }
           setAutoClickerCount(prev => prev - 1);
-          // Add 5 minutes (5 * 60 * 1000)
+          // Add 5 minutes
           setAutoClickerEndTime(Date.now() + (5 * 60 * 1000));
           setBackpackMessage("Auto-Clicker activé pour 5 min ! ⚡");
           setTimeout(() => {
               setBackpackMessage("");
-              setIsBackpackOpen(false); // Close backpack to show game
+              setIsBackpackOpen(false);
           }, 1500);
       }
   };
@@ -444,6 +507,7 @@ const App = () => {
 
   const StatusIcon = marketStatus.icon;
   const isAutoClickerRunning = autoClickerEndTime > Date.now();
+  const cartTotals = calculateCartTotals();
 
   return (
     <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col items-center relative overflow-x-hidden selection:bg-yellow-500 selection:text-slate-900">
@@ -479,6 +543,20 @@ const App = () => {
                     <span>Actif</span>
                 </div>
             )}
+            
+            <button
+                onClick={() => setIsCartOpen(true)}
+                className="bg-indigo-600/50 hover:bg-indigo-600 border border-indigo-500/50 p-2 rounded-full transition-all group relative"
+                title="Panier"
+            >
+                <ShoppingCart className="w-4 h-4 text-indigo-200 group-hover:scale-110 transition-transform" />
+                {cart.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold">
+                    {cart.length}
+                  </span>
+                )}
+            </button>
+
             <button
                 onClick={() => setIsBackpackOpen(true)}
                 className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 p-2 rounded-full transition-all group relative"
@@ -489,16 +567,10 @@ const App = () => {
 
             <button
                 onClick={() => setIsStoreOpen(true)}
-                className="bg-indigo-600/50 hover:bg-indigo-600 border border-indigo-500/50 p-2 rounded-full transition-all group relative"
+                className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 p-2 rounded-full transition-all group relative"
                 title="Boutique"
             >
-                <ShoppingBag className="w-4 h-4 text-indigo-200 group-hover:scale-110 transition-transform" />
-                {(voucherCount > 0 || autoClickerCount > 0) && (
-                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
-                  </span>
-                )}
+                <ShoppingBag className="w-4 h-4 text-slate-200 group-hover:scale-110 transition-transform" />
             </button>
             <button
                 onClick={handleCashoutOpen}
@@ -622,6 +694,126 @@ const App = () => {
             WeEarn &copy; 2024. Le marché change toutes les 10 s.
         </footer>
       </div>
+
+      {/* Cart Modal */}
+      {isCartOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+             <div 
+                className="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-3xl p-6 shadow-2xl relative animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <button
+                    onClick={() => setIsCartOpen(false)}
+                    className="absolute top-4 right-4 p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition"
+                >
+                    <X className="w-4 h-4" />
+                </button>
+
+                <div className="flex flex-col items-center gap-2 text-center pt-2 mb-6 shrink-0">
+                    <div className="w-16 h-16 bg-gradient-to-br from-indigo-700 to-indigo-500 rounded-2xl flex items-center justify-center shadow-inner border border-indigo-500/30 mb-2">
+                        <ShoppingCart className="w-8 h-8 text-indigo-100" />
+                    </div>
+                    <h2 className="text-xl font-bold text-white">Mon Panier</h2>
+                    <p className="text-slate-400 text-xs">{cart.length} article(s)</p>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-4 pr-1 min-h-0">
+                    {cart.length === 0 ? (
+                        <div className="text-center py-10 text-slate-500 text-sm">
+                            Votre panier est vide.
+                        </div>
+                    ) : (
+                        cart.map((item, index) => (
+                            <div key={index} className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 flex flex-col gap-3">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex gap-3">
+                                        <div className={`p-2 rounded-lg ${item.type === 'hotel' ? 'bg-blue-900/30 text-blue-400' : 'bg-purple-900/30 text-purple-400'}`}>
+                                            {item.type === 'hotel' ? <Ticket className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-white text-sm">{item.name}</div>
+                                            {item.type !== 'hotel' && (
+                                                <div className="text-xs text-slate-500">{item.basePrice} $WE</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => removeFromCart(index)}
+                                        className="text-slate-500 hover:text-red-400 transition"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+
+                                {item.type === 'hotel' && (
+                                    <div className="bg-slate-900/50 rounded-lg p-2 space-y-2 border border-slate-700/30">
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-slate-400 flex items-center gap-1"><Moon className="w-3 h-3"/> Nuits</span>
+                                            <div className="flex items-center gap-2 bg-slate-800 rounded px-1">
+                                                <button className="p-1 hover:text-white" onClick={() => updateCartItem(index, { nights: Math.max(1, (item.nights||1) - 1) })}><Minus className="w-3 h-3"/></button>
+                                                <span className="w-4 text-center font-mono">{item.nights}</span>
+                                                <button className="p-1 hover:text-white" onClick={() => updateCartItem(index, { nights: Math.min(7, (item.nights||1) + 1) })}><Plus className="w-3 h-3"/></button>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-slate-400 flex items-center gap-1"><Users className="w-3 h-3"/> Pers.</span>
+                                            <div className="flex items-center gap-2 bg-slate-800 rounded px-1">
+                                                <button className="p-1 hover:text-white" onClick={() => updateCartItem(index, { people: Math.max(1, (item.people||1) - 1) })}><Minus className="w-3 h-3"/></button>
+                                                <span className="w-4 text-center font-mono">{item.people}</span>
+                                                <button className="p-1 hover:text-white" onClick={() => updateCartItem(index, { people: Math.min(4, (item.people||1) + 1) })}><Plus className="w-3 h-3"/></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                <div className="flex justify-end pt-2 border-t border-slate-700/50">
+                                    <div className="font-mono font-bold text-white">
+                                        {item.type === 'hotel' 
+                                            ? calculateHotelPrice(item.basePrice, item.nights || 1, item.people || 1) 
+                                            : item.basePrice} $WE
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {cart.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-slate-700 shrink-0 space-y-3">
+                        <div className="space-y-1 text-sm">
+                            <div className="flex justify-between text-slate-400">
+                                <span>Sous-total</span>
+                                <span>{cartTotals.subtotal} $WE</span>
+                            </div>
+                            <div className="flex justify-between text-slate-400">
+                                <span>Taxes (6%)</span>
+                                <span>{cartTotals.tax} $WE</span>
+                            </div>
+                            <div className="flex justify-between text-lg font-bold text-white pt-2 border-t border-slate-700/50">
+                                <span>Total</span>
+                                <span className={cartTotals.total > balance ? "text-red-400" : "text-emerald-400"}>
+                                    {cartTotals.total} $WE
+                                </span>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={handleCheckout}
+                            className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95
+                                ${cartTotals.total > balance 
+                                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed' 
+                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/25'}
+                            `}
+                            disabled={cartTotals.total > balance}
+                        >
+                            <Wallet className="w-4 h-4" />
+                            Payer {cartTotals.total} $WE
+                        </button>
+                    </div>
+                )}
+             </div>
+        </div>
+      )}
 
       {/* Cashout Modal */}
       {isCashoutOpen && (
@@ -875,15 +1067,15 @@ const App = () => {
                         <div className="flex flex-col gap-2">
                              <div className="flex justify-between items-center px-1">
                                 <span className="text-xs text-slate-400">Total estimé:</span>
-                                <span className={`text-xl font-bold ${calculateHotelTotal() > balance ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    {calculateHotelTotal()} <span className="text-xs text-slate-500">$WE</span>
+                                <span className={`text-xl font-bold ${calculateHotelPrice(hotelPrice, hotelNights, hotelPeople) > balance ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    {calculateHotelPrice(hotelPrice, hotelNights, hotelPeople)} <span className="text-xs text-slate-500">$WE</span>
                                 </span>
                             </div>
                             <button
-                                onClick={handleBuyVoucher}
+                                onClick={handleAddHotelToCart}
                                 className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-xl text-sm transition-all shadow-lg active:scale-95"
                             >
-                                Réserver
+                                Ajouter au panier
                             </button>
                         </div>
                     </div>
@@ -907,10 +1099,10 @@ const App = () => {
                             </div>
                         </div>
                         <button
-                            onClick={handleBuyAutoClicker}
+                            onClick={handleAddAutoClickerToCart}
                             className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded-xl text-sm transition-all shadow-lg active:scale-95"
                         >
-                            Acheter
+                            Ajouter au panier
                         </button>
                     </div>
 
