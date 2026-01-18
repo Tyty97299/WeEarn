@@ -1,16 +1,49 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick, Bell, ShoppingBag, Building2, Ticket, Backpack, Bot, Play, Timer } from "lucide-react";
+import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick, Bell, ShoppingBag, Building2, Ticket, Backpack, Bot, Play, Timer, Activity } from "lucide-react";
 
-// Fonction pseudo-aléatoire déterministe basée sur une graine (seed)
+// Fonction pseudo-aléatoire déterministe
 const pseudoRandom = (seed: number) => {
     let x = Math.sin(seed) * 10000;
     return x - Math.floor(x);
 };
 
 // Configuration du marché
-const MARKET_UPDATE_INTERVAL = 5 * 1000; // 5 secondes pour le taux du clic
-const STORE_UPDATE_INTERVAL = 60 * 1000; // 1 minute pour les prix de la boutique
+const UPDATE_INTERVAL = 10 * 1000; // 10 secondes pour TOUT (Market + Store)
+
+const SimpleChart = ({ data }: { data: number[] }) => {
+    if (!data || data.length < 2) return null;
+
+    const max = Math.max(...data, 2.5); // Ensure some headroom
+    const min = Math.min(...data, 0);
+    const range = max - min || 1;
+    const height = 60;
+    const width = 100;
+
+    // Create points for SVG path
+    const points = data.map((val, i) => {
+        const x = (i / (data.length - 1)) * width;
+        const y = height - ((val - min) / range) * height;
+        return `${x},${y}`;
+    }).join(" ");
+
+    const fillPath = `${points} ${width},${height} 0,${height}`;
+
+    return (
+        <div className="w-full h-20 overflow-hidden relative">
+            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="none">
+                <defs>
+                    <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="currentColor" className="text-yellow-500" stopOpacity="0.3" />
+                        <stop offset="100%" stopColor="currentColor" className="text-yellow-500" stopOpacity="0" />
+                    </linearGradient>
+                </defs>
+                <path d={`M ${fillPath}`} fill="url(#chartGradient)" className="text-yellow-500" />
+                <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" className="text-yellow-400" />
+            </svg>
+        </div>
+    );
+};
 
 const App = () => {
   const [balance, setBalance] = useState(0);
@@ -31,6 +64,7 @@ const App = () => {
   // Market State
   const [currentRate, setCurrentRate] = useState(0.5);
   const [marketStatus, setMarketStatus] = useState({ name: 'Stable', color: 'text-yellow-400', icon: Minus });
+  const [rateHistory, setRateHistory] = useState<number[]>([0.5, 0.5, 0.4, 0.6, 0.5, 0.8, 0.5, 0.2, 0.5]); // Initial dummy history
   const [timeLeft, setTimeLeft] = useState("");
 
   // Store Items State
@@ -86,30 +120,87 @@ const App = () => {
       }
   }, [isBackpackOpen, isCashoutOpen]);
 
-  // --- Logic for Store Price Fluctuation (Every 1 minute) ---
+  // --- Unified Game Loop (Market & Store) ---
   useEffect(() => {
-      const updateStorePrices = () => {
-          // Pour centrer les probabilités au milieu de la fourchette (Distribution normale/Gaussienne)
-          // On fait la moyenne de 3 tirages aléatoires.
-          const randomFactor = (Math.random() + Math.random() + Math.random()) / 3;
+    const gameTick = () => {
+        const now = Date.now();
+        const timeBlock = Math.floor(now / UPDATE_INTERVAL);
+        const rand = pseudoRandom(timeBlock);
+        
+        // 1. Calculate New Click Rate
+        let newRate = 0.5;
+        let newStatus = { name: 'Stable', color: 'text-yellow-400', icon: Minus };
 
-          // Prix Hôtel : 250 - 500
-          // Moyenne théorique : 250 + (0.5 * 250) = 375.
-          // Plage très fréquente : 330 - 420.
-          setHotelPrice(Math.floor(250 + (randomFactor * 250)));
+        if (rand < 0.20) {
+            newRate = 0.1;
+            newStatus = { name: 'Bear Market', color: 'text-red-500', icon: TrendingDown };
+        } else if (rand < 0.70) {
+            newRate = 0.5;
+            newStatus = { name: 'Stable', color: 'text-yellow-400', icon: Minus };
+        } else if (rand < 0.90) {
+            newRate = 1.0;
+            newStatus = { name: 'Bull Run', color: 'text-green-400', icon: TrendingUp };
+        } else {
+            newRate = 2.0;
+            newStatus = { name: 'MOON 🚀', color: 'text-purple-400', icon: Zap };
+        }
 
-          // Prix Auto Clicker : 500 - 2000
-          // Moyenne théorique : 500 + (0.5 * 1500) = 1250.
-          // Plage très fréquente : 1000 - 1500.
-          setAutoClickerPrice(Math.floor(500 + (randomFactor * 1500)));
-      };
+        setCurrentRate(newRate);
+        setMarketStatus(newStatus);
+        
+        // Update History (Keep last 30 points)
+        setRateHistory(prev => {
+            const newHist = [...prev, newRate];
+            if (newHist.length > 30) newHist.shift();
+            return newHist;
+        });
 
-      // Initial update
-      updateStorePrices();
+        // 2. Update Store Prices (Synchronized)
+        // Average of 3 randoms for Bell Curve distribution
+        const randomFactor = (Math.random() + Math.random() + Math.random()) / 3;
+        
+        // Hotel: 250 - 500 (Center ~375)
+        setHotelPrice(Math.floor(250 + (randomFactor * 250)));
+        // Auto-Clicker: 500 - 2000 (Center ~1250)
+        setAutoClickerPrice(Math.floor(500 + (randomFactor * 1500)));
 
-      const interval = setInterval(updateStorePrices, STORE_UPDATE_INTERVAL);
-      return () => clearInterval(interval);
-  }, []);
+        // 3. Notification Logic
+        const isBullish = rand >= 0.70;
+        if (isBullish && notificationsEnabled && lastNotifiedBlock.current !== timeBlock) {
+             new Notification("WeEarn 🚀", { 
+                body: `Le marché explose ! Taux actuel : ${newRate} $WE/clic`,
+             });
+             lastNotifiedBlock.current = timeBlock;
+        }
+
+        // 4. Timer Visuals
+        const nextTime = (timeBlock + 1) * UPDATE_INTERVAL;
+        const diff = nextTime - now;
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${seconds}s`);
+    };
+
+    // Run immediately on mount
+    gameTick();
+    
+    // Check time left every second for UI, but rely on block logic for updates
+    const interval = setInterval(() => {
+        const now = Date.now();
+        const timeBlock = Math.floor(now / UPDATE_INTERVAL);
+        const nextTime = (timeBlock + 1) * UPDATE_INTERVAL;
+        
+        // Update countdown
+        const diff = nextTime - now;
+        if (diff <= 0) {
+            gameTick(); // Force update if crossed boundary
+        } else {
+            const seconds = Math.ceil(diff / 1000);
+            setTimeLeft(`${seconds}s`);
+        }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [notificationsEnabled]);
 
   // --- Auto Clicker Logic ---
   useEffect(() => {
@@ -118,16 +209,13 @@ const App = () => {
             if (Date.now() > autoClickerEndTime) {
                 setAutoClickerEndTime(0); // Finished
             } else {
-                // Auto click adds current rate
                 setBalance(prev => parseFloat((prev + currentRate).toFixed(2)));
                 setTotalClicks(prev => prev + 1);
-                // Optional: small visual feedback without full ripple
             }
         }, 1000); // 1 click per second
         return () => clearInterval(interval);
     }
   }, [autoClickerEndTime, currentRate]);
-
 
   // Handle buying Hotel Vouchers
   const handleBuyVoucher = () => {
@@ -188,18 +276,15 @@ const App = () => {
       }
   };
 
-  // Handle buying notifications
   const handleBuyNotifications = async () => {
       if (!("Notification" in window)) {
           alert("Votre navigateur ne supporte pas les notifications.");
           return;
       }
-
       if (balance < 100) {
           alert("Fonds insuffisants ! Il vous faut 100 $WE pour activer les notifications.");
           return;
       }
-
       const confirmPurchase = window.confirm("Êtes-vous sûr de consommer 100 $WE pour activer les notifications ?");
       if (!confirmPurchase) return;
 
@@ -213,54 +298,6 @@ const App = () => {
           alert("Permission refusée. Impossible d'activer les alertes.");
       }
   };
-
-  // Market Logic Loop & Notification Trigger
-  useEffect(() => {
-    const updateMarket = () => {
-        const now = Date.now();
-        const timeBlock = Math.floor(now / MARKET_UPDATE_INTERVAL);
-        const rand = pseudoRandom(timeBlock);
-        
-        let newRate = 0.5;
-        let newStatus = { name: 'Stable', color: 'text-yellow-400', icon: Minus };
-
-        if (rand < 0.20) {
-            newRate = 0.1;
-            newStatus = { name: 'Bear Market', color: 'text-red-500', icon: TrendingDown };
-        } else if (rand < 0.70) {
-            newRate = 0.5;
-            newStatus = { name: 'Stable', color: 'text-yellow-400', icon: Minus };
-        } else if (rand < 0.90) {
-            newRate = 1.0;
-            newStatus = { name: 'Bull Run', color: 'text-green-400', icon: TrendingUp };
-        } else {
-            newRate = 2.0;
-            newStatus = { name: 'MOON 🚀', color: 'text-purple-400', icon: Zap };
-        }
-
-        setCurrentRate(newRate);
-        setMarketStatus(newStatus);
-
-        const isBullish = rand >= 0.70;
-        
-        if (isBullish && notificationsEnabled && lastNotifiedBlock.current !== timeBlock) {
-             new Notification("WeEarn 🚀", { 
-                body: `Le marché explose ! Taux actuel : ${newRate} $WE/clic`,
-             });
-             lastNotifiedBlock.current = timeBlock;
-        }
-
-        const nextTime = (timeBlock + 1) * MARKET_UPDATE_INTERVAL;
-        const diff = nextTime - now;
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        setTimeLeft(`${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
-    };
-
-    updateMarket();
-    const interval = setInterval(updateMarket, 1000);
-    return () => clearInterval(interval);
-  }, [notificationsEnabled]);
 
   // Load Adsterra Native Banner Script
   useEffect(() => {
@@ -299,11 +336,9 @@ const App = () => {
 
   const handleVerifyCashout = () => {
     if (adminCode === "121519") {
-        // Confirmation dialog added here
         const confirmed = window.confirm(`Êtes-vous sûr de vouloir retirer ${balance.toLocaleString()} $WE ? Cette action réinitialisera votre solde.`);
-        
         if (!confirmed) {
-            setAdminCode(""); // Reset input on cancel
+            setAdminCode("");
             return;
         }
 
@@ -319,8 +354,6 @@ const App = () => {
   };
 
   const StatusIcon = marketStatus.icon;
-
-  // Auto clicker active check
   const isAutoClickerRunning = autoClickerEndTime > Date.now();
 
   return (
@@ -371,7 +404,6 @@ const App = () => {
                 title="Boutique"
             >
                 <ShoppingBag className="w-4 h-4 text-indigo-200 group-hover:scale-110 transition-transform" />
-                {/* Notification badge if inventory has items */}
                 {(voucherCount > 0 || autoClickerCount > 0) && (
                   <span className="absolute -top-1 -right-1 flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
@@ -486,6 +518,15 @@ const App = () => {
                     </button>
                 </div>
 
+                {/* Market Fluctuation Chart */}
+                <div className="w-full max-w-[280px] bg-slate-800/30 rounded-xl border border-slate-700/50 backdrop-blur-sm p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold uppercase tracking-wider">
+                        <Activity className="w-3 h-3" />
+                        <span>Historique du taux</span>
+                    </div>
+                    <SimpleChart data={rateHistory} />
+                </div>
+
                 {/* Total Clicks Counter */}
                 <div className="flex items-center gap-2 text-slate-500 text-sm font-medium bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-700/50 animate-in fade-in slide-in-from-bottom-2">
                     <MousePointerClick className="w-4 h-4" />
@@ -495,7 +536,7 @@ const App = () => {
         </main>
 
         <footer className="text-center text-slate-500 text-xs font-medium">
-            WeEarn &copy; 2024. Le marché change toutes les 5 s.
+            WeEarn &copy; 2024. Le marché change toutes les 10 s.
         </footer>
       </div>
 
@@ -758,7 +799,7 @@ const App = () => {
                     )}
                     
                     <div className="text-center mt-2">
-                        <span className="text-[10px] text-slate-500">Prix boutique actualisés toutes les minutes.</span>
+                        <span className="text-[10px] text-slate-500">Prix boutique actualisés toutes les 10 secondes.</span>
                     </div>
                 </div>
             </div>
