@@ -19,6 +19,7 @@ const App = () => {
   const [adminCode, setAdminCode] = useState("");
   const [cashoutState, setCashoutState] = useState<'idle' | 'success' | 'error'>('idle');
   const [clickEffect, setClickEffect] = useState(false);
+  const [rippleKey, setRippleKey] = useState(0); // Clé pour forcer le redémarrage de l'animation
   
   // Market State
   const [currentRate, setCurrentRate] = useState(0.5);
@@ -110,6 +111,7 @@ const App = () => {
     setBalance(prev => parseFloat((prev + currentRate).toFixed(2)));
     setTotalClicks(prev => prev + 1);
     setClickEffect(true);
+    setRippleKey(prev => prev + 1); // Redémarre l'animation de ripple
     setTimeout(() => setClickEffect(false), 100);
   };
 
@@ -212,6 +214,9 @@ const App = () => {
                     {/* Glow effect */}
                     <div className={`absolute inset-0 bg-yellow-500/30 rounded-full blur-2xl transition-all duration-100 ${clickEffect ? 'scale-110 opacity-100' : 'scale-100 opacity-50'}`}></div>
                     
+                    {/* Ripple Effect (New) */}
+                    <div key={rippleKey} className="absolute inset-0 rounded-full border-2 border-white/50 animate-ripple opacity-0 pointer-events-none"></div>
+
                     <button
                         onClick={handleClick}
                         className={`
