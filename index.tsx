@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick, Bell, ShoppingBag, Building2, Ticket, Backpack } from "lucide-react";
+import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick, Bell, ShoppingBag, Building2, Ticket, Backpack, Bot, Play, Timer } from "lucide-react";
 
 // Fonction pseudo-aléatoire déterministe basée sur une graine (seed)
 const pseudoRandom = (seed: number) => {
@@ -9,7 +9,8 @@ const pseudoRandom = (seed: number) => {
 };
 
 // Configuration du marché
-const MARKET_UPDATE_INTERVAL = 5 * 1000; // 5 secondes en ms
+const MARKET_UPDATE_INTERVAL = 5 * 1000; // 5 secondes pour le taux du clic
+const STORE_UPDATE_INTERVAL = 60 * 1000; // 1 minute pour les prix de la boutique
 
 const App = () => {
   const [balance, setBalance] = useState(0);
@@ -22,7 +23,7 @@ const App = () => {
   
   const [adminCode, setAdminCode] = useState("");
   const [cashoutState, setCashoutState] = useState<'idle' | 'success' | 'error'>('idle');
-  const [backpackMessage, setBackpackMessage] = useState(""); // Feedback message for backpack
+  const [backpackMessage, setBackpackMessage] = useState(""); 
   
   const [clickEffect, setClickEffect] = useState(false);
   const [rippleKey, setRippleKey] = useState(0); 
@@ -32,10 +33,17 @@ const App = () => {
   const [marketStatus, setMarketStatus] = useState({ name: 'Stable', color: 'text-yellow-400', icon: Minus });
   const [timeLeft, setTimeLeft] = useState("");
 
-  // Store & Hotel State
+  // Store Items State
   const [hotelPrice, setHotelPrice] = useState(300);
+  const [autoClickerPrice, setAutoClickerPrice] = useState(1200);
+  
+  // Inventory State
   const [voucherCount, setVoucherCount] = useState(0);
+  const [autoClickerCount, setAutoClickerCount] = useState(0);
   const [storeMessage, setStoreMessage] = useState("");
+
+  // Auto Clicker Active State
+  const [autoClickerEndTime, setAutoClickerEndTime] = useState(0);
 
   // Notifications State
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -54,20 +62,20 @@ const App = () => {
 
     const savedVouchers = localStorage.getItem('weearn_vouchers');
     if (savedVouchers) setVoucherCount(parseInt(savedVouchers, 10));
+
+    const savedAutoClickers = localStorage.getItem('weearn_autoclickers');
+    if (savedAutoClickers) setAutoClickerCount(parseInt(savedAutoClickers, 10));
+
+    const savedEndTime = localStorage.getItem('weearn_autoclicker_endtime');
+    if (savedEndTime) setAutoClickerEndTime(parseInt(savedEndTime, 10));
   }, []);
 
   // Save data on change
-  useEffect(() => {
-    localStorage.setItem('weearn_balance', balance.toString());
-  }, [balance]);
-
-  useEffect(() => {
-    localStorage.setItem('weearn_total_clicks', totalClicks.toString());
-  }, [totalClicks]);
-
-  useEffect(() => {
-    localStorage.setItem('weearn_vouchers', voucherCount.toString());
-  }, [voucherCount]);
+  useEffect(() => { localStorage.setItem('weearn_balance', balance.toString()); }, [balance]);
+  useEffect(() => { localStorage.setItem('weearn_total_clicks', totalClicks.toString()); }, [totalClicks]);
+  useEffect(() => { localStorage.setItem('weearn_vouchers', voucherCount.toString()); }, [voucherCount]);
+  useEffect(() => { localStorage.setItem('weearn_autoclickers', autoClickerCount.toString()); }, [autoClickerCount]);
+  useEffect(() => { localStorage.setItem('weearn_autoclicker_endtime', autoClickerEndTime.toString()); }, [autoClickerEndTime]);
 
   // Reset inputs when opening modals
   useEffect(() => {
@@ -78,25 +86,51 @@ const App = () => {
       }
   }, [isBackpackOpen, isCashoutOpen]);
 
-  // --- Logic for Hotel Price Fluctuation (Every 3 seconds) ---
+  // --- Logic for Store Price Fluctuation (Every 1 minute) ---
   useEffect(() => {
-      const updateHotelPrice = () => {
-          // Prix entre 250 et 500
-          const bias = Math.max(Math.random(), Math.random());
-          const price = Math.floor(250 + (bias * 250)); 
-          setHotelPrice(price);
+      const updateStorePrices = () => {
+          // Prix Hôtel : entre 250 et 500, biais vers le haut
+          const hotelBias = Math.max(Math.random(), Math.random());
+          setHotelPrice(Math.floor(250 + (hotelBias * 250)));
+
+          // Prix Auto Clicker : entre 500 et 2000, biais vers le milieu (courbe en cloche)
+          // Moyenne de 2 nombres aléatoires tend vers 0.5
+          const autoClickerBias = (Math.random() + Math.random()) / 2;
+          // 500 + (0..1 * 1500) -> 500 à 2000
+          setAutoClickerPrice(Math.floor(500 + (autoClickerBias * 1500)));
       };
 
-      const interval = setInterval(updateHotelPrice, 3000);
+      // Initial update
+      updateStorePrices();
+
+      const interval = setInterval(updateStorePrices, STORE_UPDATE_INTERVAL);
       return () => clearInterval(interval);
   }, []);
 
-  // Handle buying vouchers
+  // --- Auto Clicker Logic ---
+  useEffect(() => {
+    if (autoClickerEndTime > Date.now()) {
+        const interval = setInterval(() => {
+            if (Date.now() > autoClickerEndTime) {
+                setAutoClickerEndTime(0); // Finished
+            } else {
+                // Auto click adds current rate
+                setBalance(prev => parseFloat((prev + currentRate).toFixed(2)));
+                setTotalClicks(prev => prev + 1);
+                // Optional: small visual feedback without full ripple
+            }
+        }, 1000); // 1 click per second
+        return () => clearInterval(interval);
+    }
+  }, [autoClickerEndTime, currentRate]);
+
+
+  // Handle buying Hotel Vouchers
   const handleBuyVoucher = () => {
       if (balance >= hotelPrice) {
           setBalance(prev => prev - hotelPrice);
           setVoucherCount(prev => prev + 1);
-          setStoreMessage("Achat réussi ! Bonnes vacances 🏨");
+          setStoreMessage("Ticket acheté ! 🏨");
           setTimeout(() => setStoreMessage(""), 2000);
       } else {
           setStoreMessage("Fonds insuffisants !");
@@ -104,7 +138,20 @@ const App = () => {
       }
   };
 
-  // Handle using vouchers (Backpack)
+  // Handle buying Auto Clicker
+  const handleBuyAutoClicker = () => {
+      if (balance >= autoClickerPrice) {
+          setBalance(prev => prev - autoClickerPrice);
+          setAutoClickerCount(prev => prev + 1);
+          setStoreMessage("Auto-Clicker acquis ! 🤖");
+          setTimeout(() => setStoreMessage(""), 2000);
+      } else {
+          setStoreMessage("Fonds insuffisants !");
+          setTimeout(() => setStoreMessage(""), 2000);
+      }
+  };
+
+  // Handle using items (Backpack)
   const handleUseVoucher = () => {
       if (adminCode === "121519") {
           if (voucherCount > 0) {
@@ -117,6 +164,23 @@ const App = () => {
           }
       } else {
           setBackpackMessage("Code incorrect ❌");
+      }
+  };
+
+  const handleActivateAutoClicker = () => {
+      if (autoClickerCount > 0) {
+          if (autoClickerEndTime > Date.now()) {
+             setBackpackMessage("Déjà actif ! Attendez la fin.");
+             return;
+          }
+          setAutoClickerCount(prev => prev - 1);
+          // Add 5 minutes (5 * 60 * 1000)
+          setAutoClickerEndTime(Date.now() + (5 * 60 * 1000));
+          setBackpackMessage("Auto-Clicker activé pour 5 min ! ⚡");
+          setTimeout(() => {
+              setBackpackMessage("");
+              setIsBackpackOpen(false); // Close backpack to show game
+          }, 1500);
       }
   };
 
@@ -244,6 +308,9 @@ const App = () => {
 
   const StatusIcon = marketStatus.icon;
 
+  // Auto clicker active check
+  const isAutoClickerRunning = autoClickerEndTime > Date.now();
+
   return (
     <div className="min-h-screen bg-slate-900 text-white font-sans flex flex-col items-center relative overflow-x-hidden selection:bg-yellow-500 selection:text-slate-900">
       
@@ -272,6 +339,12 @@ const App = () => {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            {isAutoClickerRunning && (
+                <div className="flex items-center gap-1 bg-green-500/20 border border-green-500/50 px-2 py-1 rounded-full text-xs font-bold text-green-400 animate-pulse">
+                    <Bot className="w-3 h-3" />
+                    <span>Actif</span>
+                </div>
+            )}
             <button
                 onClick={() => setIsBackpackOpen(true)}
                 className="bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 p-2 rounded-full transition-all group relative"
@@ -286,7 +359,8 @@ const App = () => {
                 title="Boutique"
             >
                 <ShoppingBag className="w-4 h-4 text-indigo-200 group-hover:scale-110 transition-transform" />
-                {voucherCount > 0 && (
+                {/* Notification badge if inventory has items */}
+                {(voucherCount > 0 || autoClickerCount > 0) && (
                   <span className="absolute -top-1 -right-1 flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
@@ -369,9 +443,9 @@ const App = () => {
                 {/* Button Wrapper */}
                 <div className="relative">
                     {/* Glow effect */}
-                    <div className={`absolute inset-0 bg-yellow-500/30 rounded-full blur-2xl transition-all duration-100 ${clickEffect ? 'scale-110 opacity-100' : 'scale-100 opacity-50'}`}></div>
+                    <div className={`absolute inset-0 bg-yellow-500/30 rounded-full blur-2xl transition-all duration-100 ${clickEffect || isAutoClickerRunning ? 'scale-110 opacity-100' : 'scale-100 opacity-50'}`}></div>
                     
-                    {/* Ripple Effect (New) */}
+                    {/* Ripple Effect */}
                     <div key={rippleKey} className="absolute inset-0 rounded-full border-2 border-white/50 animate-ripple opacity-0 pointer-events-none"></div>
 
                     <button
@@ -393,7 +467,7 @@ const App = () => {
                         {/* Shine effect */}
                         <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
                         
-                        <Zap className={`w-20 h-20 text-yellow-900 mb-2 drop-shadow-sm transition-transform duration-75 ${clickEffect ? 'scale-110' : 'scale-100'}`} fill="currentColor" />
+                        <Zap className={`w-20 h-20 text-yellow-900 mb-2 drop-shadow-sm transition-transform duration-75 ${clickEffect || isAutoClickerRunning ? 'scale-110' : 'scale-100'}`} fill="currentColor" />
                         <span className="text-yellow-950 font-black text-3xl uppercase tracking-widest drop-shadow-sm select-none">
                             +{currentRate}
                         </span>
@@ -514,57 +588,75 @@ const App = () => {
                     <p className="text-slate-400 text-xs">Vos objets et récompenses.</p>
                 </div>
 
-                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4 flex flex-col gap-4">
-                    {/* Item List */}
-                    <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-700/50">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-900/30 p-2 rounded-lg text-blue-400">
-                                <Ticket className="w-5 h-5" />
+                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4 flex flex-col gap-4 max-h-[60vh] overflow-y-auto">
+                    
+                    {/* Item 1: Hotel */}
+                    <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-3">
+                         <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-blue-900/30 p-2 rounded-lg text-blue-400">
+                                    <Ticket className="w-5 h-5" />
+                                </div>
+                                <div className="flex flex-col text-left">
+                                    <span className="font-bold text-sm text-white">Bons WeHotel</span>
+                                    <span className="text-[10px] text-slate-500">Nuit d'hôtel standard</span>
+                                </div>
                             </div>
-                            <div className="flex flex-col text-left">
-                                <span className="font-bold text-sm text-white">Bons WeHotel</span>
-                                <span className="text-[10px] text-slate-500">Nuit d'hôtel standard</span>
-                            </div>
+                            <div className="font-mono font-bold text-lg text-white">x{voucherCount}</div>
                         </div>
-                        <div className="font-mono font-bold text-lg text-white">
-                            x{voucherCount}
-                        </div>
-                    </div>
 
-                    {/* Usage Area */}
-                    {voucherCount > 0 ? (
-                        <div className="border-t border-slate-700/50 pt-4 mt-2">
-                            <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">
-                                Utiliser un bon (Admin)
-                            </label>
+                        {voucherCount > 0 && (
                             <div className="flex gap-2">
                                 <input 
                                     type="password"
                                     inputMode="numeric"
                                     value={adminCode}
-                                    onChange={(e) => {
-                                        setAdminCode(e.target.value);
-                                        setBackpackMessage("");
-                                    }}
+                                    onChange={(e) => { setAdminCode(e.target.value); setBackpackMessage(""); }}
                                     placeholder="Code Admin"
-                                    className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none transition-colors"
+                                    className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs focus:border-indigo-500 outline-none"
                                 />
-                                <button 
-                                    onClick={handleUseVoucher}
-                                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors"
-                                >
+                                <button onClick={handleUseVoucher} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded-lg text-xs">
                                     Valider
                                 </button>
                             </div>
-                            {backpackMessage && (
-                                <div className={`text-xs mt-3 text-center font-bold animate-in fade-in ${backpackMessage.includes('!') ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {backpackMessage}
+                        )}
+                    </div>
+
+                    {/* Item 2: Auto Clicker */}
+                    <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 p-3">
+                         <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-purple-900/30 p-2 rounded-lg text-purple-400">
+                                    <Bot className="w-5 h-5" />
                                 </div>
-                            )}
+                                <div className="flex flex-col text-left">
+                                    <span className="font-bold text-sm text-white">Bot WeClick</span>
+                                    <span className="text-[10px] text-slate-500">Auto-clic pendant 5 min</span>
+                                </div>
+                            </div>
+                            <div className="font-mono font-bold text-lg text-white">x{autoClickerCount}</div>
                         </div>
-                    ) : (
+
+                        {autoClickerCount > 0 && (
+                            <button 
+                                onClick={handleActivateAutoClicker} 
+                                className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-2"
+                            >
+                                <Play className="w-3 h-3" /> Activer maintenant
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Feedback Message */}
+                    {backpackMessage && (
+                        <div className={`text-xs mt-1 text-center font-bold animate-in fade-in ${backpackMessage.includes('!') ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {backpackMessage}
+                        </div>
+                    )}
+
+                    {voucherCount === 0 && autoClickerCount === 0 && (
                         <div className="text-center py-4 text-slate-500 text-sm">
-                            Votre sac est vide. Visitez la boutique !
+                            Votre sac est vide.
                         </div>
                     )}
                 </div>
@@ -594,54 +686,68 @@ const App = () => {
                     <p className="text-slate-400 text-xs">Dépensez vos $WE durement gagnés.</p>
                 </div>
 
-                {/* WeHotel Item */}
-                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4 flex flex-col gap-3">
-                    <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-900/50 p-2.5 rounded-xl text-blue-400">
-                                <Building2 className="w-6 h-6" />
+                <div className="space-y-3">
+                    {/* WeHotel Item */}
+                    <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4 flex flex-col gap-3">
+                        <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-blue-900/50 p-2.5 rounded-xl text-blue-400">
+                                    <Building2 className="w-6 h-6" />
+                                </div>
+                                <div className="text-left">
+                                    <h3 className="font-bold text-white text-sm">Nuit chez WeHotel</h3>
+                                    <p className="text-slate-400 text-[10px] leading-tight mt-0.5">Valable dans tous nos hôtels.</p>
+                                </div>
                             </div>
-                            <div className="text-left">
-                                <h3 className="font-bold text-white text-sm">Nuit chez WeHotel</h3>
-                                <p className="text-slate-400 text-[10px] leading-tight mt-0.5">Valable dans tous nos hôtels.</p>
+                            <div className="flex flex-col items-end">
+                                <span className={`text-xl font-bold ${hotelPrice > 400 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    {hotelPrice} <span className="text-xs text-slate-500">$WE</span>
+                                </span>
                             </div>
                         </div>
-                        <div className="flex flex-col items-end">
-                            <span className="text-xs text-slate-500 font-mono">Prix actuel</span>
-                            <span className={`text-xl font-bold ${hotelPrice > 400 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                {hotelPrice} <span className="text-xs text-slate-500">$WE</span>
-                            </span>
-                        </div>
+                        <button
+                            onClick={handleBuyVoucher}
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 rounded-xl text-sm transition-all shadow-lg active:scale-95"
+                        >
+                            Acheter
+                        </button>
                     </div>
 
-                    <div className="h-px w-full bg-slate-700/50"></div>
-
-                    {/* Inventory */}
-                    <div className="flex items-center justify-between text-xs px-1">
-                        <span className="text-slate-400">Vos bons d'achat</span>
-                        <div className="flex items-center gap-1.5 text-white font-semibold bg-slate-700/50 px-2 py-0.5 rounded-md">
-                            <Ticket className="w-3 h-3 text-yellow-500" />
-                            {voucherCount}
+                    {/* Auto Clicker Item */}
+                    <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4 flex flex-col gap-3">
+                        <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-purple-900/50 p-2.5 rounded-xl text-purple-400">
+                                    <Bot className="w-6 h-6" />
+                                </div>
+                                <div className="text-left">
+                                    <h3 className="font-bold text-white text-sm">Bot WeClick</h3>
+                                    <p className="text-slate-400 text-[10px] leading-tight mt-0.5">Clique auto pendant 5 min.</p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-end">
+                                <span className={`text-xl font-bold ${autoClickerPrice > 1500 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    {autoClickerPrice} <span className="text-xs text-slate-500">$WE</span>
+                                </span>
+                            </div>
                         </div>
+                        <button
+                            onClick={handleBuyAutoClicker}
+                            className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded-xl text-sm transition-all shadow-lg active:scale-95"
+                        >
+                            Acheter
+                        </button>
                     </div>
-
-                    {/* Action Button */}
-                    <button
-                        onClick={handleBuyVoucher}
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <span>Acheter pour {hotelPrice} $WE</span>
-                    </button>
 
                     {storeMessage && (
-                        <div className={`text-xs text-center font-bold animate-in fade-in slide-in-from-bottom-1 ${storeMessage.includes('réussi') ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <div className={`text-xs text-center font-bold animate-in fade-in ${storeMessage.includes('!') ? 'text-emerald-400' : 'text-red-400'}`}>
                             {storeMessage}
                         </div>
                     )}
-                </div>
-
-                <div className="mt-4 text-center">
-                    <span className="text-[10px] text-slate-500">Le prix de la chambre change toutes les 3 sec.</span>
+                    
+                    <div className="text-center mt-2">
+                        <span className="text-[10px] text-slate-500">Prix boutique actualisés toutes les minutes.</span>
+                    </div>
                 </div>
             </div>
         </div>
