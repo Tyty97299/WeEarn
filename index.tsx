@@ -210,34 +210,47 @@ const App = () => {
 
   // --- Unified Game Loop (Market & Store) ---
   useEffect(() => {
+    const getMarketStateIndex = (r: number) => {
+        // 0.1 $WE: 20% (0.0 - 0.20)
+        // 0.5 $WE: 30% (0.20 - 0.50)
+        // 1.0 $WE: 30% (0.50 - 0.80) -> Previously 20%, now 30%
+        // 2.0 $WE: 20% (0.80 - 1.00) -> The remainder
+        if (r < 0.20) return 0; // Bear
+        if (r < 0.50) return 1; // Stable
+        if (r < 0.80) return 2; // Bull
+        return 3; // Moon
+    };
+
+    const getMarketData = (idx: number) => {
+        switch(idx) {
+            case 0: return { rate: 0.1, status: { name: 'Bear Market', color: 'text-red-500', icon: TrendingDown } };
+            case 1: return { rate: 0.5, status: { name: 'Stable', color: 'text-yellow-400', icon: Minus } };
+            case 2: return { rate: 1.0, status: { name: 'Bull Run', color: 'text-green-400', icon: TrendingUp } };
+            case 3: return { rate: 2.0, status: { name: 'MOON 🚀', color: 'text-purple-400', icon: Zap } };
+            default: return { rate: 0.5, status: { name: 'Stable', color: 'text-yellow-400', icon: Minus } };
+        }
+    };
+
     const gameTick = () => {
         const now = Date.now();
         const timeBlock = Math.floor(now / UPDATE_INTERVAL);
-        const rand = pseudoRandom(timeBlock);
         
-        // 1. Calculate New Click Rate
-        let newRate = 0.5;
-        let newStatus = { name: 'Stable', color: 'text-yellow-400', icon: Minus };
+        // 1. Calculate New Click Rate (With No-Repeat Logic)
+        const rand = pseudoRandom(timeBlock);
+        let stateIndex = getMarketStateIndex(rand);
 
-        // Probas :
-        // 20% : 0.1
-        // 30% : 0.5
-        // 20% : 1.0
-        // 20% : 2.0 + 10% Reste = 30%
+        // Check previous state to prevent repeats
+        const prevRand = pseudoRandom(timeBlock - 1);
+        const prevStateIndex = getMarketStateIndex(prevRand);
 
-        if (rand < 0.20) {
-            newRate = 0.1;
-            newStatus = { name: 'Bear Market', color: 'text-red-500', icon: TrendingDown };
-        } else if (rand < 0.50) {
-            newRate = 0.5;
-            newStatus = { name: 'Stable', color: 'text-yellow-400', icon: Minus };
-        } else if (rand < 0.70) {
-            newRate = 1.0;
-            newStatus = { name: 'Bull Run', color: 'text-green-400', icon: TrendingUp };
-        } else {
-            newRate = 2.0;
-            newStatus = { name: 'MOON 🚀', color: 'text-purple-400', icon: Zap };
+        if (stateIndex === prevStateIndex) {
+            // Collision detected! Use a secondary seeded random to pick a shift offset (1, 2, or 3)
+            const shiftRand = pseudoRandom(timeBlock + 99999); 
+            const offset = 1 + Math.floor(shiftRand * 3); // 1, 2, or 3
+            stateIndex = (stateIndex + offset) % 4;
         }
+
+        const { rate: newRate, status: newStatus } = getMarketData(stateIndex);
 
         setCurrentRate(newRate);
         setMarketStatus(newStatus);
@@ -255,7 +268,8 @@ const App = () => {
         setAutoClickerPrice(Math.floor(500 + (randomFactor * 1500)));
 
         // 3. Notification Logic
-        const isBullish = rand >= 0.70;
+        // Use stateIndex to determine if it's Bull (2) or Moon (3)
+        const isBullish = stateIndex >= 2; 
         if (isBullish && notificationsEnabled && lastNotifiedBlock.current !== timeBlock) {
              new Notification("WeEarn 🚀", { 
                 body: `Le marché explose ! Taux actuel : ${newRate} $WE/clic`,
