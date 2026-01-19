@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { Coins, Wallet, Lock, X, CheckCircle, AlertCircle, Zap, TrendingUp, TrendingDown, Minus, Clock, MousePointerClick, Bell, ShoppingBag, Building2, Ticket, Backpack, Bot, Play, Timer, Activity, Users, Moon, ShoppingCart, Trash2, Plus, GripHorizontal } from "lucide-react";
 
-// Fonction pseudo-aléatoire déterministe
+// Fonction pseudo-aléatoire déterministe (Mulberry32)
+// Cela garantit que chaque appareil obtient le même "aléatoire" au même moment.
 const pseudoRandom = (seed: number) => {
-    let x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
+    let t = seed + 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
 // Configuration du marché
@@ -216,13 +219,19 @@ const App = () => {
         let newRate = 0.5;
         let newStatus = { name: 'Stable', color: 'text-yellow-400', icon: Minus };
 
+        // Probas :
+        // 20% : 0.1
+        // 30% : 0.5
+        // 20% : 1.0
+        // 20% : 2.0 + 10% Reste = 30%
+
         if (rand < 0.20) {
             newRate = 0.1;
             newStatus = { name: 'Bear Market', color: 'text-red-500', icon: TrendingDown };
-        } else if (rand < 0.70) {
+        } else if (rand < 0.50) {
             newRate = 0.5;
             newStatus = { name: 'Stable', color: 'text-yellow-400', icon: Minus };
-        } else if (rand < 0.90) {
+        } else if (rand < 0.70) {
             newRate = 1.0;
             newStatus = { name: 'Bull Run', color: 'text-green-400', icon: TrendingUp };
         } else {
